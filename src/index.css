@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Rebranded Modern Premium Inputs */
+input[type="text"],
+input[type="tel"],
+input[type="date"],
+input[type="number"],
+select,
+textarea {
+  border: 1px solid #e4e4e7 !important; /* border-zinc-200 */
+  border-radius: 12px !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  text-transform: none !important; /* Allow natural casing for legibility */
+  background-color: #ffffff !important;
+  color: #09090b !important; /* text-zinc-950 */
+  padding: 0.625rem 0.875rem !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+}
+
+input[type="text"]::placeholder,
+input[type="tel"]::placeholder,
+input[type="number"]::placeholder,
+textarea::placeholder {
+  color: #a1a1aa !important; /* text-zinc-400 */
+  font-weight: 400 !important;
+}
+
+input[type="text"]:focus,
+input[type="tel"]:focus,
+input[type="date"]:focus,
+input[type="number"]:focus,
+select:focus,
+textarea:focus {
+  background-color: #ffffff !important;
+  border-color: #09090b !important; /* focus-zinc-950 */
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.06) !important;
+}
+
+/* Bento Cards base styling */
+.bento-card {
+  border-radius: 16px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bento-card:hover {
+  box-shadow: 0 4px 12px -2px rgba(9, 9, 11, 0.04), 0 2px 4px -1px rgba(9, 9, 11, 0.02);
+}
+
+/* Scrollbar premium minimal look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f4f4f5; /* zinc-100 */
+}
+::-webkit-scrollbar-thumb {
+  background: #d4d4d8; /* zinc-300 */
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa; /* zinc-400 */
+}
+
+/* Custom fade animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

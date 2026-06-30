@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+    <script>
+      // Safe global polyfill patch to prevent read-only property write errors in the browser (e.g. window.fetch)
+      if (typeof window !== 'undefined') {
+        if (!window.global || window.global === window) {
+          window.global = Object.create(window);
+        }
+        try {
+          let originalFetch = window.fetch;
+          Object.defineProperty(window, 'fetch', {
+            get() {
+              return originalFetch;
+            },
+            set(val) {
+              originalFetch = val;
+            },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {
+          console.warn('Could not make window.fetch writable:', e);
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
