@@ -9,6 +9,7 @@ import { PrivacyModeProvider } from '@/src/providers/PrivacyModeProvider';
 import WizardPage from './pages/WizardPage';
 import AdminPage from './pages/AdminPage';
 import ArtistPage from './pages/ArtistPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
   return (
@@ -19,7 +20,7 @@ export default function App() {
           <Route path="/consent" element={<WizardPage />} />
           <Route path="/admin/*" element={<AdminPage />} />
           <Route path="/artist/*" element={<ArtistPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
     </PrivacyModeProvider>

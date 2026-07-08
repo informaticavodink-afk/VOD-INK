@@ -7,8 +7,13 @@ import fs from 'fs';
 
 const LOCAL_PDFS_DIR = path.join(process.cwd(), 'data', 'pdfs');
 
-if (!fs.existsSync(LOCAL_PDFS_DIR)) {
-  fs.mkdirSync(LOCAL_PDFS_DIR, { recursive: true });
+// Local disk write — optional backup, silently skipped in serverless environments
+try {
+  if (!fs.existsSync(LOCAL_PDFS_DIR)) {
+    fs.mkdirSync(LOCAL_PDFS_DIR, { recursive: true });
+  }
+} catch {
+  // Silently skip — read-only filesystem in serverless environments
 }
 
 export interface SubmitConsentPayload {
