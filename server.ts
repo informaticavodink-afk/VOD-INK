@@ -191,6 +191,20 @@ app.post('/api/upload-to-drive', async (req, res) => {
   }
 });
 
+// Catch-all error handler for /api routes: guarantees a JSON response even if
+// something throws outside a route's own try/catch (e.g. auth middleware),
+// instead of letting Express fall back to an HTML error page that breaks
+// `response.json()` on the client and shows a generic fallback message.
+app.use('/api', (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[API] Error no controlado:', err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(500).json({
+    error: err instanceof Error ? err.message : 'Error interno del servidor',
+  });
+});
+
 // --- VITE MIDDLEWARE SETUP ---
 
 async function startServer() {

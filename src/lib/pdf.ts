@@ -454,7 +454,8 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
     height: number,
     title: string,
     name: string,
-    signatureBase64: string
+    signatureBase64: string,
+    dni?: string
   ) => {
     page.drawRectangle({
       x,
@@ -468,42 +469,54 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
     page.drawText(title, {
       x: x + 5,
       y: y + 4,
-      size: 6.0,
+      size: 7.0,
       font: fontBold,
     });
 
-    page.drawText(name.substring(0, 42).toUpperCase(), {
-      x: x + 5,
-      y: y - height + 5,
-      size: 5.5,
-      font: fontRegular,
-      color: rgb(0.4, 0.4, 0.4),
-    });
-
+    // Signature inside the box (full area, name/DNI go below)
     if (signatureBase64) {
       try {
         const sigBytes = base64ToUint8Array(signatureBase64);
         const sigImage = await pdfDoc.embedPng(sigBytes);
         page.drawImage(sigImage, {
           x: x + 10,
-          y: y - height + 8,
+          y: y - height + 6,
           width: width - 20,
-          height: height - 16,
+          height: height - 12,
         });
       } catch (e) {
         console.error(`Failed to embed signature for ${title}`, e);
       }
     }
+
+    // Name and DNI clearly readable below the box
+    const infoY = y - height - 10;
+    page.drawText(name.substring(0, 48).toUpperCase(), {
+      x: x + 2,
+      y: infoY,
+      size: 7.0,
+      font: fontBold,
+      color: rgb(0.15, 0.15, 0.15),
+    });
+
+    page.drawText(`DNI/NIE: ${dni ? dni.toUpperCase() : '____________________'}`, {
+      x: x + 2,
+      y: infoY - 10,
+      size: 6.5,
+      font: fontRegular,
+      color: rgb(0.25, 0.25, 0.25),
+    });
   };
 
   // Add Signatures & Location Block
   const createSignaturesBlock = (): Block => {
-    const boxHeight = 48;
-    const boxWidth = 220;
+    const boxHeight = 60;
+    // Two boxes spanning the full content width with a central gap
+    const boxWidth = (PAGE_WIDTH - MARGIN * 2 - 25) / 2; // ~250pt each
 
-    let blockHeight = 92;
+    let blockHeight = 120;
     if (state.esMenor) {
-      blockHeight = 225;
+      blockHeight = 290;
     }
 
     return {
@@ -534,7 +547,8 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
           boxHeight,
           'EL APLICADOR:',
           nombreTattoo,
-          state.firmaAplicador
+          state.firmaAplicador,
+          state.artistaSeleccionado?.dni
         );
 
         // Draw Right: EL CLIENTE
@@ -546,12 +560,13 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
           boxHeight,
           'EL CLIENTE:',
           nombreCliente,
-          state.esMenor ? '' : state.firmaCliente
+          state.esMenor ? '' : state.firmaCliente,
+          state.datosCliente.dni
         );
 
         // --- ROW 2: Minor representation (if applicable) ---
         if (state.esMenor) {
-          tempY -= (boxHeight + 15);
+          tempY -= (boxHeight + 32); // extra room for name + DNI below the boxes
 
           // Section Title
           page.drawText('ACREDITACIÓN DEL GRADO DE MADUREZ PARA EL SUPUESTO DE MENOR DE EDAD O INCAPACITADO:', {
@@ -596,7 +611,8 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
             boxHeight,
             'EL APLICADOR:',
             nombreTattoo,
-            state.firmaAplicador
+            state.firmaAplicador,
+            state.artistaSeleccionado?.dni
           );
 
           // Draw Right: EL REPRESENTANTE LEGAL
@@ -608,7 +624,8 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
             boxHeight,
             'EL REPRESENTANTE LEGAL:',
             state.datosRepresentante.nombreYApellidos,
-            state.firmaCliente
+            state.firmaCliente,
+            state.datosRepresentante.dni
           );
         }
       }

@@ -13,7 +13,7 @@ export interface SubmitConsentApiPayload {
 
 export interface SubmitConsentApiResponse {
   consentId: string;
-  status: 'signed' | 'pending_artist' | 'upload_error';
+  status: 'signed' | 'pending_technique' | 'pending_artist' | 'upload_error';
   storagePath: string;
   driveFileId: string | null;
   driveViewLink: string | null;

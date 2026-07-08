@@ -6,9 +6,10 @@
 import React, { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import type { Database } from '@/src/types/supabase';
-import { Download, FileCheck2, Loader2, Search } from 'lucide-react';
+import { Download, FileCheck2, Loader2, Search, X } from 'lucide-react';
 import SensitiveText from '@/src/components/SensitiveText';
 import DatePicker from '@/src/components/DatePicker';
+import JSZip from 'jszip';
 
 type Consent = Database['public']['Tables']['consents']['Row'];
 
@@ -22,6 +23,8 @@ function getConsentStatusLabel(status: Consent['status']) {
   switch (status) {
     case 'signed':
       return 'Completado';
+    case 'pending_technique':
+      return 'Pendiente de intervención';
     case 'pending_artist':
       return 'Pendiente de firma';
     case 'upload_error':
@@ -33,6 +36,7 @@ function getConsentStatusLabel(status: Consent['status']) {
   }
 }
 
+
 export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
   const [consents, setConsents] = useState<ConsentWithArtist[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,12 +45,18 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
+  // States for bulk select and ZIP compression
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [zipping, setZipping] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
   const supabase = createClient();
 
   const loadConsents = async () => {
     setLoading(true);
     setError(null);
-
+    setSuccessMessage(null);
+    setSelectedIds([]); // Clear selection when loading
     const { data, error } = await supabase
       .from('consents')
       .select('*, artists(full_name)')
@@ -78,7 +88,11 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
           loadConsents();
         }
       )
-      .subscribe();
+      .subscribe((status: string) => {
+        if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+          console.warn('[Realtime ConsentsManager] canal en estado', status);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -109,6 +123,94 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
     window.open(signedData.signedUrl, '_blank');
   };
 
+  const zipAndDownloadConsents = async (consentsToZip: ConsentWithArtist[]) => {
+    const signedConsents = consentsToZip.filter((c) => c.status === 'signed');
+    const totalCount = consentsToZip.length;
+    const signedCount = signedConsents.length;
+
+    setError(null);
+    setSuccessMessage(null);
+
+    if (signedCount === 0) {
+      setError('No hay consentimientos completados (firmados) para exportar. Solo los registros con estado "Completado" tienen un archivo PDF disponible.');
+      return;
+    }
+
+    setZipping(true);
+
+    try {
+      // 1. Get storage paths for selected consents
+      const { data: files, error: filesError } = await supabase
+        .from('consent_files')
+        .select('consent_id, storage_path')
+        .in('consent_id', signedConsents.map((c) => c.id));
+
+      if (filesError || !files || files.length === 0) {
+        throw new Error(filesError?.message || 'No se encontraron archivos asociados a los consentimientos seleccionados.');
+      }
+
+      const zip = new JSZip();
+
+      // 2. Download files in parallel
+      const downloadPromises = files.map(async (file) => {
+        const consent = signedConsents.find((c) => c.id === file.consent_id);
+        if (!consent) return;
+
+        const dateStr = new Date(consent.created_at).toISOString().split('T')[0];
+        // Clean client name for safe filenames
+        const clientNameClean = consent.client_full_name
+          .trim()
+          .replace(/[\/\\?%*:|"<>]/g, '_'); // Replace invalid characters
+        const filename = `Consentimiento_${clientNameClean}_${dateStr}.pdf`;
+
+        const { data, error } = await supabase.storage
+          .from('consent-pdfs')
+          .download(file.storage_path);
+
+        if (error || !data) {
+          console.error(`Error descargando ${filename}:`, error);
+          return; // Skip if fails, continue with others
+        }
+
+        zip.file(filename, data);
+      });
+
+      await Promise.all(downloadPromises);
+
+      // 3. Generate ZIP and download
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = window.URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Consentimientos_VOD_INK_${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      if (signedCount < totalCount) {
+        setSuccessMessage(`Se exportaron ${signedCount} de los ${totalCount} consentimientos. Los ${totalCount - signedCount} restantes se omitieron por estar incompletos (sin PDF).`);
+      } else {
+        setSuccessMessage(`Se exportaron los ${signedCount} consentimientos completados correctamente en un archivo ZIP.`);
+      }
+
+      setSelectedIds([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al generar el archivo ZIP');
+    } finally {
+      setZipping(false);
+    }
+  };
+
+  const downloadBulkZip = () => {
+    const selectedConsents = consents.filter((c) => selectedIds.includes(c.id));
+    zipAndDownloadConsents(selectedConsents);
+  };
+
+  const downloadAllZip = () => {
+    zipAndDownloadConsents(filtered);
+  };
+
   const filtered = consents.filter((c) => {
     const createdAt = new Date(c.created_at);
     const matchesText =
@@ -123,12 +225,74 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="font-sans text-2xl font-black tracking-tight">Consentimientos</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="font-sans text-2xl font-black tracking-tight">Consentimientos</h2>
+        </div>
+        <button
+          type="button"
+          onClick={downloadAllZip}
+          disabled={zipping || filtered.filter((c) => c.status === 'signed').length === 0}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition-all hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {zipping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          Exportar todos (ZIP)
+        </button>
       </div>
 
       {error && (
         <div className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl">{error}</div>
+      )}
+
+      {successMessage && (
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs p-3 rounded-xl flex items-center justify-between animate-fadeIn">
+          <span>{successMessage}</span>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage(null)}
+            className="text-emerald-500 hover:text-emerald-700 ml-2"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {selectedIds.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-950 text-white p-4 rounded-2xl animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-extrabold uppercase tracking-wider">
+              {selectedIds.length} {selectedIds.length === 1 ? 'consentimiento seleccionado' : 'consentimientos seleccionados'}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={downloadBulkZip}
+              disabled={zipping}
+              className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer disabled:opacity-60"
+            >
+              {zipping ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Comprimiendo...
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" />
+                  Exportar ZIP
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="p-2 text-zinc-400 hover:text-white transition-all cursor-pointer"
+              title="Cancelar selección"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
 
       {loading ? (
@@ -170,6 +334,20 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
             <table className="w-full min-w-[920px] text-left text-sm">
               <thead className="bg-zinc-50 border-b border-zinc-200">
               <tr>
+                <th className="w-10 px-4 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.length === filtered.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(filtered.map((c) => c.id));
+                      } else {
+                        setSelectedIds([]);
+                      }
+                    }}
+                    className="rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer"
+                  />
+                </th>
                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-zinc-500">Cliente</th>
                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-zinc-500">Estado</th>
                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-zinc-500">Tatuador</th>
@@ -181,6 +359,20 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
             <tbody className="divide-y divide-zinc-100">
               {filtered.map((consent) => (
                 <tr key={consent.id} className="hover:bg-zinc-50/50">
+                  <td className="w-10 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(consent.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds([...selectedIds, consent.id]);
+                        } else {
+                          setSelectedIds(selectedIds.filter((id) => id !== consent.id));
+                        }
+                      }}
+                      className="rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer"
+                    />
+                  </td>
                   <td className="px-4 py-3 font-medium text-zinc-900">
                     <SensitiveText>{consent.client_full_name}</SensitiveText>
                   </td>
@@ -190,6 +382,10 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
                         className={`inline-flex px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md border ${
                           consent.status === 'signed'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : consent.status === 'pending_technique'
+                            ? 'bg-purple-50 text-purple-700 border-purple-100'
+                            : consent.status === 'pending_artist'
+                            ? 'bg-amber-50 text-amber-700 border-amber-100'
                             : consent.status === 'upload_error'
                             ? 'bg-red-50 text-red-700 border-red-100'
                             : 'bg-zinc-100 text-zinc-600 border-zinc-200'

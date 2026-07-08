@@ -26,7 +26,7 @@ export interface SubmitConsentPayload {
 
 export interface SubmitConsentResult {
   consentId: string;
-  status: 'signed' | 'pending_artist' | 'upload_error';
+  status: 'signed' | 'pending_technique' | 'pending_artist' | 'upload_error';
   storagePath: string;
   driveFileId: string | null;
   driveViewLink: string | null;
@@ -75,7 +75,7 @@ export async function submitConsentToSupabase(
   if (existingConsent) {
     return {
       consentId: existingConsent.id,
-      status: existingConsent.status as 'signed' | 'pending_artist' | 'upload_error',
+      status: existingConsent.status as 'signed' | 'pending_technique' | 'pending_artist' | 'upload_error',
       storagePath: `studios/${studioId}/artists/${artist.id}/${existingConsent.id}.pdf`,
       driveFileId: null,
       driveViewLink: null,
@@ -114,7 +114,7 @@ export async function submitConsentToSupabase(
         firmaCliente: state.firmaCliente, // Save client's signature base64!
       },
       signed_at: hasArtistSignature ? new Date().toISOString() : null, // Only fully signed when artist signs
-      status: hasArtistSignature ? 'signed' : 'pending_artist',
+      status: hasArtistSignature ? 'signed' : 'pending_technique',
       idempotency_key: idempotencyKey,
     })
     .select('id')
@@ -134,7 +134,7 @@ export async function submitConsentToSupabase(
       upsert: true,
     });
 
-  let status: 'signed' | 'pending_artist' | 'upload_error' = hasArtistSignature ? 'signed' : 'pending_artist';
+  let status: 'signed' | 'pending_technique' | 'pending_artist' | 'upload_error' = hasArtistSignature ? 'signed' : 'pending_technique';
   let driveFileId: string | null = null;
   let driveViewLink: string | null = null;
 
@@ -368,4 +368,75 @@ export async function signConsentAsArtist(
   }
 
   return { consentId: consent.id, status, storagePath, driveFileId, driveViewLink };
+}
+
+export async function saveConsentTechnique(
+  consentId: string,
+  techniqueData: any
+): Promise<{ success: boolean; status: string }> {
+  const supabase = createServiceClient();
+
+  const { error } = await supabase
+    .from('consents')
+    .update({
+      technique_data: techniqueData,
+      status: 'pending_artist'
+    })
+    .eq('id', consentId);
+
+  if (error) {
+    throw new Error(`Error al guardar los datos de intervención: ${error.message}`);
+  }
+
+  return { success: true, status: 'pending_artist' };
+}
+
+export async function cancelConsentAsArtist(
+  consentId: string
+): Promise<{ success: boolean; status: 'cancelled' }> {
+  const supabase = createServiceClient();
+
+  const { data: consent, error: fetchError } = await supabase
+    .from('consents')
+    .select('id, studio_id, artist_id, status')
+    .eq('id', consentId)
+    .single();
+
+  if (fetchError || !consent) {
+    throw new Error('Consentimiento no encontrado');
+  }
+
+  if (consent.status === 'signed') {
+    throw new Error('No se puede descartar un consentimiento ya firmado');
+  }
+
+  if (consent.status === 'cancelled') {
+    return { success: true, status: 'cancelled' };
+  }
+
+  const { error: updateError } = await supabase
+    .from('consents')
+    .update({ status: 'cancelled' })
+    .eq('id', consentId);
+
+  if (updateError) {
+    throw new Error(`Error al descartar el consentimiento: ${updateError.message}`);
+  }
+
+  const { error: auditError } = await supabase.from('audit_logs').insert({
+    studio_id: consent.studio_id,
+    artist_id: consent.artist_id,
+    consent_id: consent.id,
+    action: 'consent_cancelled_by_artist',
+    metadata: {
+      previous_status: consent.status,
+      source: 'artist_panel',
+    },
+  });
+
+  if (auditError) {
+    console.error('Error registrando auditoría del descarte de consentimiento:', auditError);
+  }
+
+  return { success: true, status: 'cancelled' };
 }

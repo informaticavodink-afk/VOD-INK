@@ -66,11 +66,24 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
   const [saving, setSaving] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
+  // States for bulk/mass actions
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkEditForm, setBulkEditForm] = useState({
+    qualification: '',
+    drive_folder_id: '',
+    status: 'active' as 'active' | 'paused',
+    updateQualification: false,
+    updateDriveFolder: false,
+    updateStatus: false,
+  });
+
   const supabase = createClient();
 
   const loadArtists = async () => {
     setLoading(true);
     setError(null);
+    setSelectedIds([]); // Clear selection when loading
     const { data, error } = await supabase
       .from('artists')
       .select('*')
@@ -203,6 +216,119 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
     }
   };
 
+  const handleBulkStatus = async (newStatus: 'active' | 'paused') => {
+    setLoading(true);
+    setError(null);
+    const { error } = await supabase
+      .from('artists')
+      .update({ status: newStatus })
+      .in('id', selectedIds);
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setSelectedIds([]);
+      await loadArtists();
+    }
+    setLoading(false);
+  };
+
+  const handleBulkDelete = async () => {
+    const selectedArtists = artists.filter((a) => selectedIds.includes(a.id));
+    const names = selectedArtists.map((a) => a.full_name).join(', ');
+
+    if (
+      !window.confirm(
+        `¿Eliminar a los siguientes tatuadores: ${names}? Si alguno tiene consentimientos asociados, la base de datos bloqueará el borrado para no romper el historial.`
+      )
+    ) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const failedDeletes: string[] = [];
+
+    await Promise.all(
+      selectedIds.map(async (id) => {
+        try {
+          const response = await fetch(`/api/artists/${id}`, { method: 'DELETE' });
+          if (!response.ok) {
+            const artistName = artists.find((a) => a.id === id)?.full_name || id;
+            const errDetail = await parseApiError(response);
+            failedDeletes.push(`${artistName}: ${errDetail}`);
+          }
+        } catch (err) {
+          const artistName = artists.find((a) => a.id === id)?.full_name || id;
+          failedDeletes.push(`${artistName}: Error de conexión`);
+        }
+      })
+    );
+
+    if (failedDeletes.length > 0) {
+      setError(`No se pudieron eliminar algunos tatuadores:\n${failedDeletes.join('\n')}`);
+    }
+
+    setSelectedIds([]);
+    await loadArtists();
+  };
+
+  const openBulkEdit = () => {
+    setBulkEditForm({
+      qualification: '',
+      drive_folder_id: '',
+      status: 'active',
+      updateQualification: false,
+      updateDriveFolder: false,
+      updateStatus: false,
+    });
+    setShowBulkEditModal(true);
+  };
+
+  const handleBulkEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const updates: any = {};
+    let hasUpdates = false;
+
+    if (bulkEditForm.updateQualification) {
+      updates.qualification = bulkEditForm.qualification;
+      hasUpdates = true;
+    }
+    if (bulkEditForm.updateDriveFolder) {
+      updates.drive_folder_id = bulkEditForm.drive_folder_id || null;
+      hasUpdates = true;
+    }
+    if (bulkEditForm.updateStatus) {
+      updates.status = bulkEditForm.status;
+      hasUpdates = true;
+    }
+
+    if (!hasUpdates) {
+      setError('No seleccionaste ningún campo para actualizar en lote.');
+      setShowBulkEditModal(false);
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    const { error } = await supabase
+      .from('artists')
+      .update(updates)
+      .in('id', selectedIds);
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setShowBulkEditModal(false);
+      setSelectedIds([]);
+      await loadArtists();
+    }
+    setSaving(false);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -220,8 +346,60 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl">
+        <div className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl whitespace-pre-line">
           {error}
+        </div>
+      )}
+
+      {selectedIds.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-950 text-white p-4 rounded-2xl animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-extrabold uppercase tracking-wider">
+              {selectedIds.length} {selectedIds.length === 1 ? 'tatuador seleccionado' : 'tatuadores seleccionados'}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={openBulkEdit}
+              className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-zinc-700 transition-all cursor-pointer"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Editar
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkStatus('active')}
+              className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-zinc-700 transition-all text-emerald-400 cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5" />
+              Activar
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkStatus('paused')}
+              className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-zinc-700 transition-all text-amber-400 cursor-pointer"
+            >
+              <Pause className="w-3.5 h-3.5" />
+              Pausar
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="flex items-center gap-1.5 px-3 py-2 bg-red-950 text-red-400 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-red-900 transition-all border border-red-800/30 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Eliminar
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="p-2 text-zinc-400 hover:text-white transition-all cursor-pointer"
+              title="Cancelar selección"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -235,6 +413,20 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="bg-zinc-50 border-b border-zinc-200">
               <tr>
+                <th className="w-10 px-4 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={artists.length > 0 && selectedIds.length === artists.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(artists.map((a) => a.id));
+                      } else {
+                        setSelectedIds([]);
+                      }
+                    }}
+                    className="rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer"
+                  />
+                </th>
                 <th className="w-12 px-4 py-3 font-bold text-xs uppercase tracking-wider text-zinc-500">Estado</th>
                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-zinc-500">Nombre y apellidos</th>
                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-zinc-500">Licencia tatuador/a</th>
@@ -247,6 +439,20 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
             <tbody className="divide-y divide-zinc-100">
               {artists.map((artist) => (
                 <tr key={artist.id} className="hover:bg-zinc-50/50">
+                  <td className="w-10 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(artist.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds([...selectedIds, artist.id]);
+                        } else {
+                          setSelectedIds(selectedIds.filter((id) => id !== artist.id));
+                        }
+                      }}
+                      className="rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer"
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <SensitiveText>
                       <span
@@ -499,6 +705,138 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
                 {saving ? 'Guardando...' : 'Sí, reemplazar'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk edit modal */}
+      {showBulkEditModal && (
+        <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-sm flex items-center justify-center p-5">
+          <div className="bg-white border border-zinc-200 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-sans font-extrabold text-sm text-zinc-950">
+                Editar {selectedIds.length} tatuadores en lote
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowBulkEditModal(false)}
+                className="p-1 text-zinc-400 hover:text-zinc-900"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleBulkEditSubmit} className="space-y-4">
+              <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-3 text-xs text-zinc-600">
+                Marcá la casilla del campo que deseás actualizar para todos los tatuadores seleccionados.
+              </div>
+
+              {/* Qualification */}
+              <div className="space-y-2 border border-zinc-100 rounded-xl p-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={bulkEditForm.updateQualification}
+                    onChange={(e) =>
+                      setBulkEditForm({ ...bulkEditForm, updateQualification: e.target.checked })
+                    }
+                    className="rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer"
+                  />
+                  <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-zinc-700">
+                    Actualizar Licencia / Titulación
+                  </span>
+                </label>
+                {bulkEditForm.updateQualification && (
+                  <input
+                    type="text"
+                    value={bulkEditForm.qualification}
+                    onChange={(e) =>
+                      setBulkEditForm({ ...bulkEditForm, qualification: e.target.value })
+                    }
+                    required
+                    placeholder="Licencia de tatuador/a"
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950"
+                  />
+                )}
+              </div>
+
+              {/* Drive Folder ID */}
+              <div className="space-y-2 border border-zinc-100 rounded-xl p-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={bulkEditForm.updateDriveFolder}
+                    onChange={(e) =>
+                      setBulkEditForm({ ...bulkEditForm, updateDriveFolder: e.target.checked })
+                    }
+                    className="rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer"
+                  />
+                  <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-zinc-700">
+                    Actualizar ID carpeta Drive
+                  </span>
+                </label>
+                {bulkEditForm.updateDriveFolder && (
+                  <input
+                    type="text"
+                    value={bulkEditForm.drive_folder_id}
+                    onChange={(e) =>
+                      setBulkEditForm({ ...bulkEditForm, drive_folder_id: e.target.value })
+                    }
+                    placeholder="ID de carpeta (opcional)"
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950"
+                  />
+                )}
+              </div>
+
+              {/* Status */}
+              <div className="space-y-2 border border-zinc-100 rounded-xl p-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={bulkEditForm.updateStatus}
+                    onChange={(e) =>
+                      setBulkEditForm({ ...bulkEditForm, updateStatus: e.target.checked })
+                    }
+                    className="rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer"
+                  />
+                  <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-zinc-700">
+                    Actualizar Estado
+                  </span>
+                </label>
+                {bulkEditForm.updateStatus && (
+                  <select
+                    value={bulkEditForm.status}
+                    onChange={(e) =>
+                      setBulkEditForm({
+                        ...bulkEditForm,
+                        status: e.target.value as 'active' | 'paused',
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950"
+                  >
+                    <option value="active">Activo</option>
+                    <option value="paused">Pausado</option>
+                  </select>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkEditModal(false)}
+                  className="flex-1 border border-zinc-200 bg-white text-zinc-700 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-zinc-50 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 bg-zinc-950 text-white py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-zinc-800 disabled:opacity-60 cursor-pointer"
+                >
+                  {saving ? 'Guardando...' : 'Aplicar cambios'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

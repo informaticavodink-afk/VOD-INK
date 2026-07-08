@@ -1,6 +1,0 @@
-{
-  "name": "Consentimiento Informado VOD INK",
-  "description": "PWA para la cumplimentación y firma del consentimiento informado para arte corporal (tatuajes, micropigmentación y piercings) en el estudio VOD INK de Santander, Cantabria, con respaldo en Google Drive.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

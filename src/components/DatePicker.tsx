@@ -7,6 +7,7 @@ interface DatePickerProps {
   placeholder?: string;
   error?: string;
   dark?: boolean; // Si es true, usa estilos oscuros para el bento del tutor
+  futureYears?: boolean; // Si es true, permite seleccionar años futuros
 }
 
 const MONTHS = [
@@ -21,7 +22,8 @@ export default function DatePicker({
   onChange,
   placeholder = 'dd/mm/aaaa',
   error,
-  dark = false
+  dark = false,
+  futureYears = false
 }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,9 +63,11 @@ export default function DatePicker({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Generar años (desde hace 100 años hasta el año actual)
+  // Generar años
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 101 }, (_, i) => currentYear - i);
+  const years = futureYears
+    ? Array.from({ length: 20 }, (_, i) => currentYear + 10 - i) // De +10 a -9 del año actual
+    : Array.from({ length: 101 }, (_, i) => currentYear - i);
 
   // Datos de los días del mes
   const daysInMonth = new Date(year, month + 1, 0).getDate();

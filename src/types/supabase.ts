@@ -264,7 +264,7 @@ export type Database = {
     Enums: {
       profile_role: 'owner' | 'artist';
       artist_status: 'active' | 'paused';
-      consent_status: 'draft' | 'pending_artist' | 'signed' | 'upload_error' | 'cancelled';
+      consent_status: 'draft' | 'pending_technique' | 'pending_artist' | 'signed' | 'upload_error' | 'cancelled';
       notification_status: 'unread' | 'read' | 'resolved';
       notification_type: 'pending_signature' | 'pdf_upload_error' | 'consent_signed' | 'incomplete_data';
     };
