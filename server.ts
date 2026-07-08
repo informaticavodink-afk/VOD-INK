@@ -3,13 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import './utils/env';
+
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+import { Router } from 'express';
+import { refreshSupabaseSession } from './utils/supabase/middleware';
+import consentRoutes from './server/routes/consents';
+import artistRoutes from './server/routes/artists';
 
 const app = express();
-const PORT = 3000;
+const apiRouter = Router();
+apiRouter.use('/consents', consentRoutes);
+apiRouter.use('/artists', artistRoutes);
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Ensure local folders exist for secure backup of consents
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -30,6 +39,10 @@ if (!fs.existsSync(SUBMISSIONS_FILE)) {
 // Support large JSON payloads (since we receive Base64 PDFs)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Refresh Supabase Auth cookies for API requests that include a Supabase session.
+app.use('/api', refreshSupabaseSession);
+app.use('/api', apiRouter);
 
 // Helper to get local submissions
 function getLocalSubmissions(): any[] {

@@ -13,6 +13,7 @@ interface SignaturePadProps {
   initialDataUrl?: string;
   placeholderText?: string;
   id?: string;
+  onConfirmSubmit?: () => void;
 }
 
 export default function SignaturePad({
@@ -21,20 +22,24 @@ export default function SignaturePad({
   initialDataUrl,
   placeholderText = 'Firme aquí con el dedo o lápiz óptico',
   id = 'signature-pad',
+  onConfirmSubmit,
 }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const signaturePadRef = useRef<SignaturePadClass | null>(null);
   const [hasStroke, setHasStroke] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
+  const [isLocked, setIsLocked] = useState(() => !!initialDataUrl);
   const [previewUrl, setPreviewUrl] = useState<string | null>(initialDataUrl || null);
+  const prevInitialDataUrlRef = useRef<string | undefined>(initialDataUrl);
 
-  useEffect(() => {
+  // Inline prop-change adjustment (avoids stale intermediate render from useEffect)
+  if (initialDataUrl !== prevInitialDataUrlRef.current) {
+    prevInitialDataUrlRef.current = initialDataUrl;
     if (initialDataUrl) {
       setPreviewUrl(initialDataUrl);
       setIsLocked(true);
     }
-  }, [initialDataUrl]);
+  }
 
   const initPad = () => {
     const canvas = canvasRef.current;
@@ -138,7 +143,7 @@ export default function SignaturePad({
           <img
             src={previewUrl}
             alt="Firma"
-            className="max-h-[80%] max-w-[90%] object-contain bg-white border border-zinc-200 shadow-sm rounded-xl p-3"
+            className="max-h-[70%] max-w-[90%] object-contain bg-white border border-zinc-200 shadow-sm rounded-xl p-3 mb-6"
             referrerPolicy="no-referrer"
           />
           <div className="absolute top-3 right-3 bg-zinc-950 text-white px-3 py-1 text-[10px] font-mono font-bold rounded-full flex items-center gap-1 shadow-sm">
@@ -146,15 +151,27 @@ export default function SignaturePad({
             REGISTRADA
           </div>
 
-          <button
-            type="button"
-            onClick={handleUnlock}
-            className="absolute bottom-4 flex items-center gap-2 px-5 py-2.5 border border-zinc-200 bg-white text-zinc-700 text-xs font-semibold rounded-xl hover:bg-zinc-50 active:bg-zinc-100 min-h-[44px] cursor-pointer transition-all shadow-sm hover:border-zinc-300"
-            id={`${id}-unlock`}
-          >
-            <FilePenLine className="w-4 h-4 text-zinc-500" />
-            Volver a firmar
-          </button>
+          <div className="absolute bottom-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleUnlock}
+              className="flex items-center gap-2 px-4 py-2.5 border border-zinc-200 bg-white text-zinc-700 text-xs font-semibold rounded-xl hover:bg-zinc-50 active:bg-zinc-100 min-h-[44px] cursor-pointer transition-all shadow-sm hover:border-zinc-300"
+              id={`${id}-unlock`}
+            >
+              <FilePenLine className="w-4 h-4 text-zinc-500" />
+              Volver a firmar
+            </button>
+            {onConfirmSubmit && (
+              <button
+                type="button"
+                onClick={onConfirmSubmit}
+                className="flex items-center gap-2 px-4 py-2.5 bg-zinc-950 text-white text-xs font-extrabold uppercase tracking-wider rounded-xl hover:bg-zinc-800 active:bg-zinc-900 min-h-[44px] cursor-pointer transition-all shadow-md hover:shadow-lg"
+                id={`${id}-submit`}
+              >
+                Confirmar y enviar
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         // Signature capture state

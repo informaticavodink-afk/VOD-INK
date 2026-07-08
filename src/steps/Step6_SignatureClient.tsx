@@ -8,6 +8,7 @@ import SignaturePad from '../components/SignaturePad';
 import { LEGAL_SECTIONS } from '../lib/legalTexts';
 import { Cliente, RepresentanteLegal } from '../types';
 import { ShieldCheck, Check, CheckCircle2 } from 'lucide-react';
+import SensitiveText from '../components/SensitiveText';
 
 interface Step6SignatureClientProps {
   datosCliente: Cliente;
@@ -16,6 +17,7 @@ interface Step6SignatureClientProps {
   firmaCliente: string;
   onUpdate: (firmaCliente: string) => void;
   triggerValidationRef: React.MutableRefHandle<(() => Promise<boolean>) | null>;
+  onConfirmSubmit?: () => void;
 }
 
 export default function Step6SignatureClient({
@@ -25,6 +27,7 @@ export default function Step6SignatureClient({
   firmaCliente,
   onUpdate,
   triggerValidationRef,
+  onConfirmSubmit,
 }: Step6SignatureClientProps) {
   const [signature, setSignature] = useState(firmaCliente);
 
@@ -92,11 +95,11 @@ export default function Step6SignatureClient({
           <div className="pt-3 border-t border-zinc-100 mt-3 flex flex-wrap justify-between items-center text-xs font-sans text-zinc-500 gap-y-2">
             <div>
               Firmante:{' '}
-              <span className="font-bold text-zinc-900 uppercase">{nombreFirmante}</span>
+              <SensitiveText className="font-bold text-zinc-900 uppercase">{nombreFirmante}</SensitiveText>
             </div>
             <div>
               DNI/NIE:{' '}
-              <span className="font-bold text-zinc-900 uppercase font-mono">{dniFirmante}</span>
+              <SensitiveText className="font-bold text-zinc-900 uppercase font-mono">{dniFirmante}</SensitiveText>
             </div>
           </div>
         </div>
@@ -119,16 +122,9 @@ export default function Step6SignatureClient({
               setSignature('');
               onUpdate('');
             }}
+            onConfirmSubmit={onConfirmSubmit}
           />
         </div>
-
-        {/* Success status message */}
-        {signature && (
-          <div className="flex items-center justify-center gap-2 text-emerald-800 font-sans text-xs font-semibold bg-emerald-50 p-3.5 border border-emerald-200 rounded-xl animate-fadeIn shadow-sm">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Firma del cliente registrada y autenticada correctamente</span>
-          </div>
-        )}
       </div>
     </div>
   );

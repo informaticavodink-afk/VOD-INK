@@ -9,6 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ClientSchema, RepresentanteSchema, getAge } from '../lib/schema';
 import { Cliente, RepresentanteLegal } from '../types';
 import { ShieldAlert, User, AlertTriangle, FileText, ToggleLeft, ToggleRight } from 'lucide-react';
+import DatePicker from '../components/DatePicker';
 
 interface Step1ClientProps {
   datosCliente: Cliente;
@@ -36,6 +37,7 @@ export default function Step1Client({
     formState: { errors: clientErrors },
     trigger: triggerClient,
     getValues: getClientValues,
+    setValue: setClientValue,
   } = useForm<Cliente>({
     resolver: zodResolver(ClientSchema),
     defaultValues: datosCliente,
@@ -49,6 +51,7 @@ export default function Step1Client({
     trigger: triggerRep,
     getValues: getRepValues,
     watch: watchRep,
+    setValue: setRepValue,
   } = useForm<RepresentanteLegal>({
     resolver: zodResolver(RepresentanteSchema),
     defaultValues: datosRepresentante,
@@ -56,6 +59,7 @@ export default function Step1Client({
   });
 
   const watchFechaNacimiento = watchClient('fechaNacimiento');
+  const watchFechaNacimientoRep = watchRep('fechaNacimiento');
 
   // Watch client birthdate to auto-toggle minor status
   useEffect(() => {
@@ -118,9 +122,6 @@ export default function Step1Client({
           <h2 className="font-sans font-extrabold text-2xl text-zinc-950 tracking-tight">
             Datos de la Persona Usuaria
           </h2>
-          <p className="font-sans text-xs text-zinc-500">
-            Completa la información identificativa regulada por el Gobierno de Cantabria
-          </p>
         </div>
 
         {/* Bento Grid Container */}
@@ -176,9 +177,13 @@ export default function Step1Client({
                     Fecha Nacimiento
                   </label>
                   <input
-                    type="date"
+                    type="hidden"
                     {...regClient('fechaNacimiento')}
-                    className="w-full"
+                  />
+                  <DatePicker
+                    value={watchFechaNacimiento || ''}
+                    onChange={(val) => setClientValue('fechaNacimiento', val, { shouldValidate: true, shouldDirty: true })}
+                    error={clientErrors.fechaNacimiento?.message}
                   />
                   {clientErrors.fechaNacimiento && (
                     <span className="text-red-600 font-sans text-[10px] block mt-1 font-medium">
@@ -249,7 +254,7 @@ export default function Step1Client({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2 space-y-1">
                 <label className="font-sans font-semibold text-zinc-500 text-[10px] uppercase tracking-wider block">
-                  Domicilio habitual
+                  Domicilio completo
                 </label>
                 <input
                   type="text"
@@ -368,9 +373,14 @@ export default function Step1Client({
                     Fecha Nacimiento Tutor
                   </label>
                   <input
-                    type="date"
+                    type="hidden"
                     {...regRep('fechaNacimiento')}
-                    className="w-full !bg-zinc-800 !text-white !border-zinc-700 focus:!border-white"
+                  />
+                  <DatePicker
+                    value={watchFechaNacimientoRep || ''}
+                    onChange={(val) => setRepValue('fechaNacimiento', val, { shouldValidate: true, shouldDirty: true })}
+                    error={repErrors.fechaNacimiento?.message}
+                    dark={true}
                   />
                   {repErrors.fechaNacimiento && (
                     <span className="text-red-400 font-sans text-[10px] block mt-1 font-medium">
@@ -389,10 +399,10 @@ export default function Step1Client({
                     {...regRep('parentesco')}
                     className="w-full !bg-zinc-800 !text-white !border-zinc-700 focus:!border-white"
                   >
-                    <option value="" className="text-zinc-900">Seleccione...</option>
-                    <option value="PADRE" className="text-zinc-900">PADRE</option>
-                    <option value="MADRE" className="text-zinc-900">MADRE</option>
-                    <option value="TUTOR_LEGAL" className="text-zinc-900">TUTOR/A LEGAL</option>
+                    <option value="" className="bg-zinc-800 text-white">Seleccione...</option>
+                    <option value="PADRE" className="bg-zinc-800 text-white">PADRE</option>
+                    <option value="MADRE" className="bg-zinc-800 text-white">MADRE</option>
+                    <option value="TUTOR_LEGAL" className="bg-zinc-800 text-white">TUTOR/A LEGAL</option>
                   </select>
                   {repErrors.parentesco && (
                     <span className="text-red-400 font-sans text-[10px] block mt-1 font-medium">
@@ -409,10 +419,10 @@ export default function Step1Client({
                     {...regRep('acreditaMediante')}
                     className="w-full !bg-zinc-800 !text-white !border-zinc-700 focus:!border-white"
                   >
-                    <option value="" className="text-zinc-900">Seleccione...</option>
-                    <option value="LIBRO_DE_FAMILIA" className="text-zinc-900">LIBRO DE FAMILIA</option>
-                    <option value="DNI_AMBOS" className="text-zinc-900">DNI DE AMBOS</option>
-                    <option value="SENTENCIA_TUTELA" className="text-zinc-900">SENTENCIA JUDICIAL</option>
+                    <option value="" className="bg-zinc-800 text-white">Seleccione...</option>
+                    <option value="LIBRO_DE_FAMILIA" className="bg-zinc-800 text-white">LIBRO DE FAMILIA</option>
+                    <option value="DNI_AMBOS" className="bg-zinc-800 text-white">DNI DE AMBOS</option>
+                    <option value="SENTENCIA_TUTELA" className="bg-zinc-800 text-white">SENTENCIA JUDICIAL</option>
                   </select>
                   {repErrors.acreditaMediante && (
                     <span className="text-red-400 font-sans text-[10px] block mt-1 font-medium">

@@ -445,113 +445,177 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
 
   blocks.push(createConformityBlock());
 
+  // Helper to draw signature boxes
+  const drawSignatureBox = async (
+    page: any,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    title: string,
+    name: string,
+    signatureBase64: string
+  ) => {
+    page.drawRectangle({
+      x,
+      y: y - height,
+      width,
+      height,
+      borderColor: rgb(0.85, 0.85, 0.85),
+      borderWidth: 0.8,
+    });
+
+    page.drawText(title, {
+      x: x + 5,
+      y: y + 4,
+      size: 6.0,
+      font: fontBold,
+    });
+
+    page.drawText(name.substring(0, 42).toUpperCase(), {
+      x: x + 5,
+      y: y - height + 5,
+      size: 5.5,
+      font: fontRegular,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+
+    if (signatureBase64) {
+      try {
+        const sigBytes = base64ToUint8Array(signatureBase64);
+        const sigImage = await pdfDoc.embedPng(sigBytes);
+        page.drawImage(sigImage, {
+          x: x + 10,
+          y: y - height + 8,
+          width: width - 20,
+          height: height - 16,
+        });
+      } catch (e) {
+        console.error(`Failed to embed signature for ${title}`, e);
+      }
+    }
+  };
+
   // Add Signatures & Location Block
   const createSignaturesBlock = (): Block => {
+    const boxHeight = 48;
+    const boxWidth = 220;
+
+    let blockHeight = 92;
+    if (state.esMenor) {
+      blockHeight = 225;
+    }
+
     return {
       id: 'signatures',
-      height: 78,
+      height: blockHeight,
       draw: async (page, y) => {
         let tempY = y;
-        
         const dateStr = state.fecha || new Date().toLocaleDateString('es-ES');
         const placeStr = state.lugar || 'Santander';
+        const nombreTattoo = state.artistaSeleccionado?.nombreYApellidos || 'Aplicador';
+        const nombreCliente = state.datosCliente.nombreYApellidos;
+
+        // --- ROW 1: General Consent ---
         page.drawText(`En ${placeStr.toUpperCase()}, a ${dateStr}`, {
           x: MARGIN,
           y: tempY - 7.5,
           size: 7.5,
           font: fontBold,
         });
-        tempY -= 15;
+        tempY -= 28;
 
-        const boxHeight = 48;
-        const boxWidth = 220;
+        // Draw Left: APLICADOR
+        await drawSignatureBox(
+          page,
+          MARGIN,
+          tempY,
+          boxWidth,
+          boxHeight,
+          'EL APLICADOR:',
+          nombreTattoo,
+          state.firmaAplicador
+        );
 
-        page.drawRectangle({
-          x: MARGIN,
-          y: tempY - boxHeight,
-          width: boxWidth,
-          height: boxHeight,
-          borderColor: rgb(0.85, 0.85, 0.85),
-          borderWidth: 0.8,
-        });
+        // Draw Right: EL CLIENTE
+        await drawSignatureBox(
+          page,
+          PAGE_WIDTH - MARGIN - boxWidth,
+          tempY,
+          boxWidth,
+          boxHeight,
+          'EL CLIENTE:',
+          nombreCliente,
+          state.esMenor ? '' : state.firmaCliente
+        );
 
-        page.drawText('FIRMADO CLIENTE / TUTOR:', {
-          x: MARGIN + 5,
-          y: tempY + 4,
-          size: 6.0,
-          font: fontBold,
-        });
+        // --- ROW 2: Minor representation (if applicable) ---
+        if (state.esMenor) {
+          tempY -= (boxHeight + 15);
 
-        const nombreFirmante = state.esMenor ? state.datosRepresentante.nombreYApellidos : state.datosCliente.nombreYApellidos;
-        page.drawText(nombreFirmante.substring(0, 42).toUpperCase(), {
-          x: MARGIN + 5,
-          y: tempY - boxHeight + 5,
-          size: 5.5,
-          font: fontRegular,
-          color: rgb(0.4, 0.4, 0.4),
-        });
+          // Section Title
+          page.drawText('ACREDITACIÓN DEL GRADO DE MADUREZ PARA EL SUPUESTO DE MENOR DE EDAD O INCAPACITADO:', {
+            x: MARGIN,
+            y: tempY - 7.0,
+            size: 6.5,
+            font: fontBold,
+            color: rgb(0.15, 0.15, 0.15),
+          });
+          tempY -= 9;
 
-        if (state.firmaCliente) {
-          try {
-            const clientSigBytes = base64ToUint8Array(state.firmaCliente);
-            const clientSigImage = await pdfDoc.embedPng(clientSigBytes);
-            page.drawImage(clientSigImage, {
-              x: MARGIN + 10,
-              y: tempY - boxHeight + 8,
-              width: boxWidth - 20,
-              height: boxHeight - 16,
+          // Declaration text
+          const repText = `Yo, ${state.datosRepresentante.nombreYApellidos.toUpperCase()} con DNI ${state.datosRepresentante.dni.toUpperCase()} como ${state.datosRepresentante.parentesco.toUpperCase()} de ${nombreCliente.toUpperCase()}, cuyo grado de parentesco o responsabilidad acredito mediante ${state.datosRepresentante.acreditaMediante.replace(/_/g, ' ').toUpperCase()}, considero que mi tutelado/a tiene la madurez mental suficiente para someterse a la prueba de arte corporal especificada en este documento. Y, como prueba de este reconocimiento firmo la presente, en presencia del aplicador.`;
+
+          const wrappedRepText = wrapText(repText, fontRegular, 5.5, PAGE_WIDTH - MARGIN * 2);
+          for (const line of wrappedRepText) {
+            page.drawText(line, {
+              x: MARGIN,
+              y: tempY - 5.5,
+              size: 5.5,
+              font: fontRegular,
+              color: rgb(0.3, 0.3, 0.3),
             });
-          } catch (e) {
-            console.error('Failed to embed client signature', e);
+            tempY -= 7;
           }
-        }
+          tempY -= 4;
 
-        page.drawRectangle({
-          x: PAGE_WIDTH - MARGIN - boxWidth,
-          y: tempY - boxHeight,
-          width: boxWidth,
-          height: boxHeight,
-          borderColor: rgb(0.85, 0.85, 0.85),
-          borderWidth: 0.8,
-        });
+          page.drawText(`En ${placeStr.toUpperCase()}, a ${dateStr}`, {
+            x: MARGIN,
+            y: tempY - 7.5,
+            size: 7.5,
+            font: fontBold,
+          });
+          tempY -= 28;
 
-        page.drawText('FIRMADO TÉCNICO APLICADOR:', {
-          x: PAGE_WIDTH - MARGIN - boxWidth + 5,
-          y: tempY + 4,
-          size: 6.0,
-          font: fontBold,
-        });
+          // Draw Left: APLICADOR (Row 2)
+          await drawSignatureBox(
+            page,
+            MARGIN,
+            tempY,
+            boxWidth,
+            boxHeight,
+            'EL APLICADOR:',
+            nombreTattoo,
+            state.firmaAplicador
+          );
 
-        const nombreTattoo = state.artistaSeleccionado?.nombreYApellidos || 'Aplicador';
-        page.drawText(nombreTattoo.substring(0, 42).toUpperCase(), {
-          x: PAGE_WIDTH - MARGIN - boxWidth + 5,
-          y: tempY - boxHeight + 5,
-          size: 5.5,
-          font: fontRegular,
-          color: rgb(0.4, 0.4, 0.4),
-        });
-
-        if (state.firmaAplicador) {
-          try {
-            const artistSigBytes = base64ToUint8Array(state.firmaAplicador);
-            const artistSigImage = await pdfDoc.embedPng(artistSigBytes);
-            page.drawImage(artistSigImage, {
-              x: PAGE_WIDTH - MARGIN - boxWidth + 10,
-              y: tempY - boxHeight + 8,
-              width: boxWidth - 20,
-              height: boxHeight - 16,
-            });
-          } catch (e) {
-            console.error('Failed to embed artist signature', e);
-          }
+          // Draw Right: EL REPRESENTANTE LEGAL
+          await drawSignatureBox(
+            page,
+            PAGE_WIDTH - MARGIN - boxWidth,
+            tempY,
+            boxWidth,
+            boxHeight,
+            'EL REPRESENTANTE LEGAL:',
+            state.datosRepresentante.nombreYApellidos,
+            state.firmaCliente
+          );
         }
       }
     };
   };
 
   blocks.push(createSignaturesBlock());
-
-  // Partition blocks into pages dynamically
   const maxY = PAGE_HEIGHT - MARGIN * 2 - 20; // Maximum content height per page (~751 pt)
   const pages: Block[][] = [[]];
   let currentPageHeight = 0;
@@ -608,14 +672,18 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
 
   const pdfBytes = await pdfDoc.save();
   const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-  const base64 = await new Promise<string>((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const arr = (reader.result as string).split(',');
-      resolve(arr[1] || '');
-    };
-    reader.readAsDataURL(blob);
-  });
+
+  let base64 = '';
+  if (typeof Buffer !== 'undefined') {
+    base64 = Buffer.from(pdfBytes).toString('base64');
+  } else {
+    let binary = '';
+    const len = pdfBytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(pdfBytes[i]);
+    }
+    base64 = btoa(binary);
+  }
 
   const cleanSurname = state.datosCliente.nombreYApellidos
     .trim()

@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Aplicador } from '../types';
+import SensitiveText from './SensitiveText';
 
 interface HeaderProps {
   pasoActual: number;
@@ -32,7 +33,7 @@ export default function Header({ pasoActual, totalPasos, artistaSeleccionado, on
               Tatuador
             </span>
             <span className="font-sans font-semibold text-xs text-zinc-800 uppercase mt-0.5">
-              {artistaSeleccionado.nombreYApellidos.split(' ')[0]}
+              <SensitiveText>{artistaSeleccionado.nombreYApellidos.split(' ')[0]}</SensitiveText>
             </span>
           </div>
         )}
