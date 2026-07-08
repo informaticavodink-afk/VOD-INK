@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { createServiceClient } from '../../server/supabase';
-import { createVercelSupabaseClient } from '../../utils/supabase/vercel';
-import { parseBody } from '../_lib/parseBody';
+import { createServiceClient } from '../../server/supabase.js';
+import { createVercelSupabaseClient } from '../../utils/supabase/vercel.js';
+import { parseBody } from '../_lib/parseBody.js';
 import type { Database } from '../../src/types/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -172,6 +172,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const message = getErrorMessage(error);
     const status =
       message === 'No autenticado' ? 401 : message.includes('Solo el propietario') ? 403 : 400;
+    console.error(`[api/artists] ${req.method} ${req.url} failed:`, error);
     sendJson(res, status, { error: message });
   }
 }

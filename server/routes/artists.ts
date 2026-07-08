@@ -191,6 +191,7 @@ router.post('/', async (req, res) => {
   } catch (error) {
     const message = getErrorMessage(error);
     const status = message === 'No autenticado' ? 401 : message.includes('Solo el propietario') ? 403 : 400;
+    console.error(`[artists] POST / failed:`, error);
     return res.status(status).json({ error: message });
   }
 });
@@ -207,13 +208,21 @@ router.patch('/:id', async (req, res) => {
     let profileId = artist.profile_id;
     const loginEmail = normalizeEmail(payload.login_email);
 
+    // Was the Supabase Auth identity just created in this same request? If so,
+    // createArtistAuthIdentity already set the email/password on creation —
+    // re-applying them via updateUserById right after is redundant and can
+    // trip Supabase Auth's own "email already registered" check against the
+    // user it just created.
+    let justCreatedIdentity = false;
+
     if (!profile && (loginEmail || payload.password)) {
       const createdLogin = await createArtistAuthIdentity(ownerProfile, payload, serviceClient);
       profile = createdLogin.profile;
       profileId = createdLogin.profile.id;
+      justCreatedIdentity = true;
     }
 
-    if (profile) {
+    if (profile && !justCreatedIdentity) {
       const authUpdates: { email?: string; password?: string; email_confirm?: boolean } = {};
 
       if (loginEmail && loginEmail !== artist.login_email) {
@@ -271,6 +280,7 @@ router.patch('/:id', async (req, res) => {
   } catch (error) {
     const message = getErrorMessage(error);
     const status = message === 'No autenticado' ? 401 : message.includes('Solo el propietario') ? 403 : 400;
+    console.error(`[artists] PATCH /${req.params.id} failed:`, error);
     return res.status(status).json({ error: message });
   }
 });
@@ -299,6 +309,7 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     const message = getErrorMessage(error);
     const status = message === 'No autenticado' ? 401 : message.includes('Solo el propietario') ? 403 : 400;
+    console.error(`[artists] DELETE /${req.params.id} failed:`, error);
     return res.status(status).json({ error: message });
   }
 });

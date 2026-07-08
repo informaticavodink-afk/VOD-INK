@@ -4,8 +4,8 @@
  */
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { ESTABLECIMIENTO_VOD_INK } from './config';
-import { LEGAL_SECTIONS } from './legalTexts';
+import { ESTABLECIMIENTO_VOD_INK } from './config.js';
+import { LEGAL_SECTIONS } from './legalTexts.js';
 import { WizardState } from '../types';
 
 function base64ToUint8Array(base64: string): Uint8Array {

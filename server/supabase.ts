@@ -1,4 +1,4 @@
-import '../utils/env';
+import '../utils/env.js';
 
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../src/types/supabase';

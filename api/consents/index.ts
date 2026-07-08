@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { generateAndSubmitConsent } from '../../server/consents';
-import { parseBody } from '../_lib/parseBody';
+import { generateAndSubmitConsent } from '../../server/consents.js';
+import { parseBody } from '../_lib/parseBody.js';
 import type { WizardState } from '../../src/types';
 
 interface ConsentsPostBody {

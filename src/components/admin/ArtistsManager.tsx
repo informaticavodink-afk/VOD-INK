@@ -38,8 +38,22 @@ interface ArtistsManagerProps {
 }
 
 async function parseApiError(response: Response) {
-  const body = await response.json().catch(() => ({ error: 'Error desconocido' }));
-  return body.error || `Error ${response.status}`;
+  // Clone so we can fall back to raw text if the body isn't valid JSON
+  // (e.g. a serverless crash/timeout returning an HTML error page).
+  const raw = await response.clone().text();
+
+  try {
+    const body = JSON.parse(raw);
+    if (body?.error) return body.error;
+  } catch {
+    // not JSON — fall through to the raw-text fallback below
+  }
+
+  const snippet = raw.trim().slice(0, 200);
+  console.error(`[ArtistsManager] Respuesta no-JSON del servidor (${response.status}):`, raw);
+  return snippet
+    ? `Error ${response.status} del servidor: ${snippet}`
+    : `Error ${response.status} del servidor (sin detalle, revisá los logs)`;
 }
 
 export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
@@ -50,6 +64,7 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
   const [editingArtist, setEditingArtist] = useState<Artist | null>(null);
   const [form, setForm] = useState<ArtistFormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
   const supabase = createClient();
 
@@ -97,12 +112,21 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
 
   const closeModal = () => {
     setShowModal(false);
+    setShowPasswordConfirm(false);
     setEditingArtist(null);
     setForm(EMPTY_FORM);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // True when this edit would overwrite credentials that already exist:
+  // the artist already has a login email assigned and the owner typed a
+  // new password. In that case we ask for explicit confirmation before
+  // sending the request, since the change is irreversible for the artist
+  // (their old password stops working immediately).
+  const isOverwritingExistingPassword = Boolean(
+    editingArtist?.login_email && form.password.trim().length > 0
+  );
+
+  const submitArtist = async () => {
     setSaving(true);
     setError(null);
 
@@ -129,9 +153,22 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
       loadArtists();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'No se pudo guardar el tatuador');
+      setShowPasswordConfirm(false);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (isOverwritingExistingPassword) {
+      // Don't submit yet — show the confirmation modal first.
+      setShowPasswordConfirm(true);
+      return;
+    }
+
+    await submitArtist();
   };
 
   const toggleStatus = async (artist: Artist) => {
@@ -383,6 +420,11 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
                   className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950"
                   placeholder={editingArtist ? 'Dejar vacío para mantener la actual' : 'Mínimo 6 caracteres'}
                 />
+                {isOverwritingExistingPassword && (
+                  <p className="text-[11px] font-medium text-amber-700">
+                    Este tatuador ya tiene acceso configurado. Al guardar te vamos a pedir confirmación antes de reemplazar su contraseña.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -422,6 +464,41 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showPasswordConfirm && editingArtist && (
+        <div className="fixed inset-0 z-[60] bg-zinc-950/50 backdrop-blur-sm flex items-center justify-center p-5">
+          <div className="bg-white border border-zinc-200 rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-2 text-amber-600">
+              <KeyRound className="w-5 h-5" />
+              <h3 className="font-sans font-extrabold text-sm text-zinc-950">Este usuario ya tiene contraseña asignada</h3>
+            </div>
+            <p className="text-xs text-zinc-600 leading-relaxed">
+              <span className="font-semibold">{editingArtist.full_name}</span> ya puede acceder con{' '}
+              <span className="font-semibold">{editingArtist.login_email}</span> y una contraseña existente.
+              Si confirmás, esa contraseña se va a reemplazar por la nueva y dejará de funcionar de inmediato.
+              ¿Estás seguro de que deseas proceder?
+            </p>
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowPasswordConfirm(false)}
+                disabled={saving}
+                className="flex-1 border border-zinc-200 bg-white text-zinc-700 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-zinc-50 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={submitArtist}
+                disabled={saving}
+                className="flex-1 bg-amber-600 text-white py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-amber-700 disabled:opacity-60"
+              >
+                {saving ? 'Guardando...' : 'Sí, reemplazar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

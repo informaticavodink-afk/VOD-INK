@@ -1,6 +1,6 @@
-import { createServiceClient } from './supabase';
-import { uploadToDrive } from './drive';
-import { generateConsentPDF } from '../src/lib/pdf';
+import { createServiceClient } from './supabase.js';
+import { uploadToDrive } from './drive.js';
+import { generateConsentPDF } from '../src/lib/pdf.js';
 import type { WizardState } from '../src/types';
 import path from 'path';
 import fs from 'fs';

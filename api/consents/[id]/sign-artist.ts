@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { signConsentAsArtist } from '../../../server/consents';
-import { parseBody } from '../../_lib/parseBody';
+import { signConsentAsArtist } from '../../../server/consents.js';
+import { parseBody } from '../../_lib/parseBody.js';
 
 interface SignArtistBody {
   signature?: string;
