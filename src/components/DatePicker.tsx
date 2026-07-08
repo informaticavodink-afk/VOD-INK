@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useLayoutEffect, useState, useRef, useEffect } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, ChevronsUpDown } from 'lucide-react';
 
 interface DatePickerProps {
@@ -26,7 +26,24 @@ export default function DatePicker({
   futureYears = false
 }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [alignRight, setAlignRight] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Alinear el popover a la derecha si el input está cerca del borde derecho de la ventana
+  useLayoutEffect(() => {
+    if (!isOpen || !containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const popoverWidth = 320; // w-80
+    const spaceRight = window.innerWidth - rect.left;
+    const spaceLeft = rect.right;
+
+    if (spaceRight < popoverWidth && spaceLeft >= popoverWidth) {
+      setAlignRight(true);
+    } else {
+      setAlignRight(false);
+    }
+  }, [isOpen]);
 
   // Fecha actual o seleccionada para navegación interna del calendario
   const [navDate, setNavDate] = useState(() => {
@@ -146,8 +163,8 @@ export default function DatePicker({
     : 'w-full flex items-center justify-between border border-zinc-200 rounded-xl bg-white text-zinc-950 px-3.5 py-2.5 shadow-sm text-sm font-medium hover:border-zinc-300 focus:outline-none focus:ring-3 focus:ring-zinc-950/6 transition-all cursor-pointer';
 
   const popoverBaseClass = dark
-    ? 'absolute left-0 mt-2 z-50 p-4 border border-zinc-700 bg-zinc-900 rounded-2xl shadow-xl space-y-3 w-80 text-white animate-fadeIn'
-    : 'absolute left-0 mt-2 z-50 p-4 border border-zinc-200 bg-white rounded-2xl shadow-xl space-y-3 w-80 text-zinc-950 animate-fadeIn';
+    ? `absolute ${alignRight ? 'right-0' : 'left-0'} mt-2 z-50 p-4 border border-zinc-700 bg-zinc-900 rounded-2xl shadow-xl space-y-3 w-80 text-white animate-fadeIn`
+    : `absolute ${alignRight ? 'right-0' : 'left-0'} mt-2 z-50 p-4 border border-zinc-200 bg-white rounded-2xl shadow-xl space-y-3 w-80 text-zinc-950 animate-fadeIn`;
 
   return (
     <div className="relative w-full" ref={containerRef}>
