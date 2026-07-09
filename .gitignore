@@ -7,3 +7,7 @@ coverage/
 .env*
 !.env.example
 .vercel
+data/
+# Local Pi runtime state
+.atl/
+.pi-subagents/
