@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Trash2, Sliders, Palette, Info, X, Check, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Sliders, Palette, Info, X, Check, Loader2, AlertCircle } from 'lucide-react';
 import { TechniqueSchema } from '../../lib/schema';
 import { Tecnica } from '../../types';
 import SensitiveText from '../SensitiveText';
@@ -34,8 +34,18 @@ export default function InterventionModal({
 }: InterventionModalProps) {
   const existingTechnique = consent?.technique_data as Tecnica | undefined;
 
+  const healthFlags = useMemo(
+    () =>
+      Array.isArray(consent?.health_flags)
+        ? consent.health_flags.filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
+        : [],
+    [consent]
+  );
+
   const [artistSignature, setArtistSignature] = useState('');
   const [signatureError, setSignatureError] = useState<string | null>(null);
+  const [healthAcknowledged, setHealthAcknowledged] = useState(false);
+  const [healthAckError, setHealthAckError] = useState<string | null>(null);
 
   const {
     register,
@@ -69,6 +79,8 @@ export default function InterventionModal({
     if (isOpen) {
       setArtistSignature('');
       setSignatureError(null);
+      setHealthAcknowledged(false);
+      setHealthAckError(null);
     }
   }, [isOpen]);
 
@@ -82,6 +94,12 @@ export default function InterventionModal({
   };
 
   const onSubmitForm = async (data: Tecnica) => {
+    if (healthFlags.length > 0 && !healthAcknowledged) {
+      setHealthAckError('Debes confirmar que revisaste los antecedentes de salud con el cliente.');
+      return;
+    }
+    setHealthAckError(null);
+
     if (!artistSignature) {
       setSignatureError('La firma del profesional es obligatoria');
       return;
@@ -327,7 +345,73 @@ export default function InterventionModal({
             <span className="font-mono text-[9px] uppercase tracking-widest text-zinc-400 font-bold block">
               Certificación Higiénico-Sanitaria & Firma
             </span>
-            
+
+            {healthFlags.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3 animate-fadeIn">
+                <div className="flex items-start gap-3 text-amber-900">
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <span className="font-sans font-bold text-xs uppercase tracking-tight block">
+                      Antecedentes de Salud Declarados
+                    </span>
+                    <p className="font-sans text-xs text-amber-800 leading-relaxed">
+                      El cliente ha declarado los siguientes antecedentes. Revísalos con él/ella antes de continuar con la intervención.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pl-8">
+                  {healthFlags.map((flag) => (
+                    <span
+                      key={flag}
+                      className="inline-flex rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-semibold text-amber-900"
+                    >
+                      <SensitiveText>{flag}</SensitiveText>
+                    </span>
+                  ))}
+                </div>
+
+                <div
+                  role="checkbox"
+                  aria-checked={healthAcknowledged}
+                  tabIndex={0}
+                  onClick={() => {
+                    setHealthAcknowledged((prev) => !prev);
+                    setHealthAckError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setHealthAcknowledged((prev) => !prev);
+                      setHealthAckError(null);
+                    }
+                  }}
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer select-none transition-all duration-200 ${
+                    healthAcknowledged
+                      ? 'bg-white border-amber-400 ring-1 ring-amber-400'
+                      : 'bg-white/60 border-amber-200'
+                  }`}
+                >
+                  <span
+                    className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-all duration-200 ${
+                      healthAcknowledged ? 'border-amber-600 bg-amber-600 text-white' : 'border-amber-300 bg-white text-transparent'
+                    }`}
+                  >
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </span>
+                  <span className="font-sans text-xs font-semibold text-amber-900 leading-snug">
+                    He revisado estos antecedentes con el cliente y confirmo que es seguro proceder.
+                  </span>
+                </div>
+
+                {healthAckError && (
+                  <span className="text-red-600 font-sans text-xs block font-medium pl-8">
+                    {healthAckError}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-4 text-[11px] text-zinc-500 leading-relaxed text-justify space-y-2">
               <p>
                 Yo, <strong className="text-zinc-950 font-bold">{artist?.full_name || 'El Técnico Aplicador'}</strong>, con DNI/NIE <strong className="text-zinc-950 font-semibold">{artist?.dni || 'N/A'}</strong> y cualificación <strong className="text-zinc-950 font-semibold">{artist?.qualification || 'Técnico Homologado'}</strong>, certifico bajo su estricta responsabilidad que se han cumplido de forma escrupulosa las medidas higiénicas reguladas por el Decreto 72/2006 de Cantabria.
@@ -374,7 +458,7 @@ export default function InterventionModal({
             </button>
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || (healthFlags.length > 0 && !healthAcknowledged)}
               className="flex-1 py-3.5 text-xs font-extrabold uppercase tracking-wider text-white bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer"
             >
               {isSaving ? (
