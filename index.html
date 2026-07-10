@@ -2,9 +2,13 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#ffffff" />
     <title>VOD Ink | Consentimiento Informado</title>
-    <meta name="description" content="Consentimiento informado estudio de tatuaje VOD Ink santander cantabria" />
+    <meta name="description" content="Consentimiento informado estudio de tatuaje VOD Ink Santander Cantabria" />
     <script>
       // Safe global polyfill patch to prevent read-only property write errors in the browser (e.g. window.fetch)
       if (typeof window !== 'undefined') {
@@ -27,26 +31,6 @@
           console.warn('Could not make window.fetch writable:', e);
         }
       }
-
-      // Absolute zoom prevention on mobile (iOS/Safari & Android)
-      if (typeof document !== 'undefined') {
-        // Prevent pinch-to-zoom
-        document.addEventListener('touchmove', function (event) {
-          if (event.scale !== undefined && event.scale !== 1) {
-            event.preventDefault();
-          }
-        }, { passive: false });
-
-        // Prevent double-tap to zoom
-        let lastTouchEnd = 0;
-        document.addEventListener('touchend', function (event) {
-          const now = (new Date()).getTime();
-          if (now - lastTouchEnd <= 300) {
-            event.preventDefault();
-          }
-          lastTouchEnd = now;
-        }, false);
-      }
     </script>
   </head>
   <body>
@@ -54,4 +38,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
