@@ -26,26 +26,26 @@ export default function StepFooter({
   isSubmitting = false,
 }: StepFooterProps) {
   return (
-    <footer className="h-20 border-t border-zinc-200 flex items-center justify-between px-5 sm:px-8 bg-white shrink-0 z-30 select-none pb-safe">
+    <footer className="min-h-20 border-t border-zinc-200 flex items-center justify-between gap-2 px-3 sm:px-8 bg-white shrink-0 z-30 select-none pb-safe">
       {/* Botón Atrás */}
-      <div>
-        {pasoActual > 0 && pasoActual < totalPasos ? (
+      <div className="shrink-0">
+        {pasoActual > 0 ? (
           <button
             type="button"
             onClick={onPrev}
-            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 active:bg-zinc-100 transition-all rounded-xl cursor-pointer min-h-[44px] shadow-sm"
+            className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 text-xs font-semibold uppercase tracking-wider border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 active:bg-zinc-100 transition-all rounded-xl cursor-pointer min-h-[44px] min-w-[44px] shadow-sm"
             id={`btn-prev-step-${pasoActual}`}
           >
-            <ArrowLeft className="w-4 h-4 text-zinc-600" />
-            <span className="hidden xs:inline">Atrás</span>
+            <ArrowLeft className="w-4 h-4 text-zinc-600 shrink-0" />
+            <span className="hidden sm:inline">Atrás</span>
           </button>
         ) : (
-          <div className="w-10 h-10" />
+          <div className="w-11 h-11" aria-hidden="true" />
         )}
       </div>
 
-      {/* Indicador de progreso por puntos (Premium Pills) */}
-      <div className="flex items-center gap-1.5">
+      {/* Indicador de progreso por puntos */}
+      <div className="hidden sm:flex items-center justify-center gap-1.5 min-w-0">
         {Array.from({ length: totalPasos + 1 }).map((_, idx) => (
           <div
             key={idx}
@@ -61,24 +61,24 @@ export default function StepFooter({
       </div>
 
       {/* Botón Siguiente / Acción */}
-      <div>
+      <div className="min-w-0 shrink-0">
         {pasoActual < totalPasos ? (
           <button
             type="button"
             disabled={!canNext || isSubmitting}
             onClick={onNext}
-            className={`flex items-center gap-2 px-6 py-2.5 text-xs font-bold uppercase tracking-wider transition-all min-h-[44px] cursor-pointer rounded-xl ${
+            className={`flex max-w-[13rem] items-center justify-center gap-2 px-3 sm:px-6 py-2.5 text-xs font-bold uppercase tracking-wider transition-all min-h-[44px] cursor-pointer rounded-xl ${
               canNext && !isSubmitting
                 ? 'bg-zinc-950 text-white hover:bg-zinc-800 active:bg-zinc-900 border border-zinc-950 shadow-sm hover:shadow'
                 : 'bg-zinc-100 text-zinc-400 border border-zinc-100 cursor-not-allowed opacity-60'
             }`}
             id={`btn-next-step-${pasoActual}`}
           >
-            <span>{isSubmitting ? 'Cargando...' : nextLabel}</span>
-            {!isSubmitting && <ArrowRight className="w-4 h-4" />}
+            <span className="truncate">{isSubmitting ? 'Cargando...' : nextLabel}</span>
+            {!isSubmitting && <ArrowRight className="w-4 h-4 shrink-0" />}
           </button>
         ) : (
-          <div className="w-10 h-10" />
+          <div className="w-11 h-11" aria-hidden="true" />
         )}
       </div>
     </footer>
