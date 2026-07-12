@@ -36,7 +36,7 @@ export default function Step2Technique({
     defaultValues: {
       ...datosTecnica,
       tintas: datosTecnica.tintas.length > 0 ? datosTecnica.tintas : [TINTAS_PREDEFINIDAS[0]],
-      duracion: datosTecnica.duracion || '1.5 Horas',
+      duracion: datosTecnica.duracion || 'indefinido',
       posibilidadesEliminacion: datosTecnica.posibilidadesEliminacion || 'Láser Q-Switched / Dermoabrasión (parcial)',
       otrosMateriales: datosTecnica.otrosMateriales || 'Agujas estériles de un solo uso, grip desechable, vaselina filante, film osmótico, jabón syndet.',
     },
@@ -186,7 +186,7 @@ export default function Step2Technique({
 
               <div className="space-y-1">
                 <label className="font-sans font-semibold text-zinc-500 text-[10px] uppercase tracking-wider block">
-                  Duración estimada
+                  Duración en el tiempo
                 </label>
                 <input
                   type="text"
