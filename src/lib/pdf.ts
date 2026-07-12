@@ -117,40 +117,24 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
         font: fontBold,
         color: rgb(1, 1, 1),
       });
-
-      page.drawText('CONSENTIMIENTO INFORMADO PARA PROCEDIMIENTOS DE ARTE CORPORAL', {
-        x: MARGIN + 15,
-        y: y - 38,
-        size: 7,
-        font: fontRegular,
-        color: rgb(0.9, 0.9, 0.9),
-      });
     }
   });
 
   // 2. Section A (Datos del Establecimiento)
   blocks.push({
     id: 'section_a',
-    height: 48,
+    height: 36,
     draw: (page, y) => {
       let tempY = y;
-      page.drawText('A. DATOS DEL ESTABLECIMIENTO DE ARTE CORPORAL (Decreto 72/2006)', {
-        x: MARGIN,
-        y: tempY - 8.5,
-        size: 8.5,
-        font: fontBold,
-        color: rgb(0, 0, 0),
-      });
-      tempY -= 12.5;
 
       const estFields = [
-        `Razón Social: ${ESTABLECIMIENTO_VOD_INK.nombreRazonSocial}  |  CIF: ${ESTABLECIMIENTO_VOD_INK.cif}`,
+        `CIF: ${ESTABLECIMIENTO_VOD_INK.cif}`,
         `Domicilio: ${ESTABLECIMIENTO_VOD_INK.domicilio}, ${ESTABLECIMIENTO_VOD_INK.localidad} (${ESTABLECIMIENTO_VOD_INK.cp})`,
         `Tlf: ${ESTABLECIMIENTO_VOD_INK.telefono}  |  Reg. Sanitario: ${ESTABLECIMIENTO_VOD_INK.numRegistroSanidad} (${ESTABLECIMIENTO_VOD_INK.fechaAutorizacion})`,
       ];
 
       for (const line of estFields) {
-        page.drawText(line, { x: MARGIN + 10, y: tempY - 7.5, size: 7.5, font: fontRegular });
+        page.drawText(line, { x: MARGIN, y: tempY - 7.5, size: 7.5, font: fontRegular });
         tempY -= 11;
       }
     }
