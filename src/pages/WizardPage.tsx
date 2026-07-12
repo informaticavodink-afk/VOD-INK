@@ -61,7 +61,7 @@ const INITIAL_TECHNIQUE: Tecnica = {
   localizacionAnatomica: 'Antebrazo izquierdo',
   tintas: [TINTAS_PREDEFINIDAS[0]],
   otrosMateriales: 'Agujas estériles de un solo uso, grip desechable, vaselina filante, film osmótico, jabón syndet.',
-  duracion: '1.5 Horas',
+  duracion: 'indefinido',
   posibilidadesEliminacion: 'Láser Q-Switched / Dermoabrasión (parcial)',
   presupuesto: '150',
 };

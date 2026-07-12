@@ -63,7 +63,7 @@ export default function InterventionModal({
         ? existingTechnique.tintas
         : [{ nombre: '', numRegistroAEMPS: '', lote: '', caducidad: '' }],
       otrosMateriales: existingTechnique?.otrosMateriales || 'Agujas estériles de un solo uso, grip desechable, vaselina filante, film osmótico, jabón syndet.',
-      duracion: existingTechnique?.duracion || '',
+      duracion: existingTechnique?.duracion || 'indefinido',
       posibilidadesEliminacion: existingTechnique?.posibilidadesEliminacion || 'Láser Q-Switched / Dermoabrasión (parcial)',
       presupuesto: existingTechnique?.presupuesto || '',
     },
@@ -225,7 +225,7 @@ export default function InterventionModal({
 
                 <div className="space-y-1">
                   <label className="font-sans font-semibold text-zinc-500 text-[10px] uppercase tracking-wider block">
-                    Duración estimada
+                    Duración en el tiempo
                   </label>
                   <input
                     type="text"
