@@ -2,28 +2,30 @@
 -- This script initializes the full Supabase database schema in the correct order.
 -- Safe to run directly in the Supabase SQL Editor.
 
+-- WARNING: This will drop all existing VOD INK tables and custom types to start fresh.
+drop table if exists public.audit_logs cascade;
+drop table if exists public.notifications cascade;
+drop table if exists public.consent_files cascade;
+drop table if exists public.consents cascade;
+drop table if exists public.artists cascade;
+drop table if exists public.profiles cascade;
+drop table if exists public.studios cascade;
+
+drop type if exists public.profile_role cascade;
+drop type if exists public.artist_status cascade;
+drop type if exists public.consent_status cascade;
+drop type if exists public.notification_status cascade;
+drop type if exists public.notification_type cascade;
+
 create extension if not exists pgcrypto;
 create schema if not exists private;
 
--- 1. Enums and Custom Types (Idempotent Creation)
-do $$
-begin
-  if not exists (select 1 from pg_type where typname = 'profile_role' and typnamespace = 'public'::regnamespace) then
-    create type public.profile_role as enum ('owner', 'artist');
-  end if;
-  if not exists (select 1 from pg_type where typname = 'artist_status' and typnamespace = 'public'::regnamespace) then
-    create type public.artist_status as enum ('active', 'paused');
-  end if;
-  if not exists (select 1 from pg_type where typname = 'consent_status' and typnamespace = 'public'::regnamespace) then
-    create type public.consent_status as enum ('draft', 'pending_technique', 'pending_artist', 'signed', 'upload_error', 'cancelled');
-  end if;
-  if not exists (select 1 from pg_type where typname = 'notification_status' and typnamespace = 'public'::regnamespace) then
-    create type public.notification_status as enum ('unread', 'read', 'resolved');
-  end if;
-  if not exists (select 1 from pg_type where typname = 'notification_type' and typnamespace = 'public'::regnamespace) then
-    create type public.notification_type as enum ('pending_signature', 'pdf_upload_error', 'consent_signed', 'incomplete_data');
-  end if;
-end $$;
+-- 1. Enums and Custom Types
+create type public.profile_role as enum ('owner', 'artist');
+create type public.artist_status as enum ('active', 'paused');
+create type public.consent_status as enum ('draft', 'pending_technique', 'pending_artist', 'signed', 'upload_error', 'cancelled');
+create type public.notification_status as enum ('unread', 'read', 'resolved');
+create type public.notification_type as enum ('pending_signature', 'pdf_upload_error', 'consent_signed', 'incomplete_data');
 
 -- 2. Triggers Helper Function
 create or replace function public.set_updated_at()
