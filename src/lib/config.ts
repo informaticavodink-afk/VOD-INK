@@ -6,37 +6,37 @@
 import { Establecimiento, Aplicador } from '../types';
 
 export const ESTABLECIMIENTO_VOD_INK: Establecimiento = {
-  nombreRazonSocial: 'VOD INK STUDIO S.L.',
-  domicilio: 'Calle Vargas 45, Bajo',
-  localidad: 'Santander',
-  cp: '39010',
-  cif: 'B39123456',
-  telefono: '942 05 44 22',
-  numRegistroSanidad: 'SAN/07/2024-C',
-  fechaAutorizacion: '15/06/2024',
+  nombreRazonSocial: 'aquí iría tus datos de establecimiento...',
+  domicilio: '[Dirección del Establecimiento]',
+  localidad: '[Ciudad]',
+  cp: '[C.P.]',
+  cif: '[CIF]',
+  telefono: '[Teléfono]',
+  numRegistroSanidad: '[Nº Reg. Sanitario]',
+  fechaAutorizacion: '[Fecha Autorización]',
 };
 
 export const ARTISTAS_VOD_INK: Aplicador[] = [
   {
-    id: 'sara_urresti',
-    nombreYApellidos: 'Sara Urresti Higuera',
-    titulacion: 'Técnico Aplicador Homologado (Decreto 72/2006)',
-    dni: '12345678X',
-    carpetaDriveId: '1_D7A9C9_SaraVodInk',
+    id: 'artista_1',
+    nombreYApellidos: 'Tatuador Ejemplo 1',
+    titulacion: 'Técnico Aplicador Homologado',
+    dni: '00000000T',
+    carpetaDriveId: 'folder_id_1',
   },
   {
-    id: 'alberto_ruiz',
-    nombreYApellidos: 'Alberto Ruiz Santos',
-    titulacion: 'Técnico Higienista y Aplicador (Decreto 72/2006)',
-    dni: '87654321Y',
-    carpetaDriveId: '1_F8B0D0_AlbertoVodInk',
+    id: 'artista_2',
+    nombreYApellidos: 'Tatuador Ejemplo 2',
+    titulacion: 'Técnico Higienista y Aplicador',
+    dni: '00000000T',
+    carpetaDriveId: 'folder_id_2',
   },
   {
-    id: 'lucia_gomez',
-    nombreYApellidos: 'Lucía Fernández Gómez',
+    id: 'artista_3',
+    nombreYApellidos: 'Tatuador Ejemplo 3',
     titulacion: 'Especialista en Micropigmentación y Tatuaje',
-    dni: '45678912Z',
-    carpetaDriveId: '1_C5E2A1_LuciaVodInk',
+    dni: '00000000T',
+    carpetaDriveId: 'folder_id_3',
   }
 ];
 

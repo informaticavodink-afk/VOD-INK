@@ -46,7 +46,7 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
 
   // Helper to add a centered, italic footer to pages
   const drawPageFooter = (pageObj: any, pageNum: number, totalPages: number) => {
-    const footerText = `VOD INK STUDIO  |  Documento de Consentimiento Informado  |  Página ${pageNum} de ${totalPages}`;
+    const footerText = `ESTUDIO DE TATUAJE  |  Documento de Consentimiento Informado  |  Página ${pageNum} de ${totalPages}`;
     const fontSize = 6.5;
     const textWidth = fontOblique.widthOfTextAtSize(footerText, fontSize);
     const x = (PAGE_WIDTH - textWidth) / 2;
@@ -110,7 +110,7 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
         color: rgb(0.05, 0.05, 0.05),
       });
 
-      page.drawText('VOD INK STUDIO', {
+      page.drawText('ESTUDIO DE TATUAJE', {
         x: MARGIN + 15,
         y: y - 22,
         size: 15,
@@ -131,7 +131,7 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
   // 2. Section A (Datos del Establecimiento)
   blocks.push({
     id: 'section_a',
-    height: 48,
+    height: 32,
     draw: (page, y) => {
       let tempY = y;
       page.drawText('A. DATOS DEL ESTABLECIMIENTO', {
@@ -143,16 +143,12 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
       });
       tempY -= 12.5;
 
-      const estFields = [
-        `Razón Social: VOD INK STUDIO  |  CIF: ${ESTABLECIMIENTO_VOD_INK.cif}`,
-        `Domicilio: ${ESTABLECIMIENTO_VOD_INK.domicilio}, ${ESTABLECIMIENTO_VOD_INK.localidad} (${ESTABLECIMIENTO_VOD_INK.cp})`,
-        `Tlf: ${ESTABLECIMIENTO_VOD_INK.telefono}  |  Reg. Sanitario: ${ESTABLECIMIENTO_VOD_INK.numRegistroSanidad} (${ESTABLECIMIENTO_VOD_INK.fechaAutorizacion})`,
-      ];
-
-      for (const line of estFields) {
-        page.drawText(line, { x: MARGIN + 10, y: tempY - 7.5, size: 7.5, font: fontRegular });
-        tempY -= 11;
-      }
+      page.drawText('aquí iría tus datos de establecimiento...', {
+        x: MARGIN + 10,
+        y: tempY - 7.5,
+        size: 7.5,
+        font: fontRegular,
+      });
     }
   });
 

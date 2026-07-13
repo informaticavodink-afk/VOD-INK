@@ -40,7 +40,7 @@ export const LEGAL_SECTIONS = {
       '1. Reacciones inflamatorias locales: Eritema (enrojecimiento), edema (hinchazón) y dolor moderado local son normales en las primeras 24-72 horas.',
       '2. Infecciones bacterianas: El incumplimiento de las normas de asepsia o de los cuidados posteriores puede propiciar infecciones locales que requieran tratamiento antibiótico médico.',
       '3. Alergias e intolerancias: Aunque los pigmentos cumplen con la normativa de la AEMPS, existe el riesgo de sensibilización o reacción alérgica tardía a alguno de sus componentes (especialmente con pigmentos rojos, amarillos y azules), manifestándose con picor crónico, granulomas o queloides.',
-      '4. Riesgo de transmisión de patógenos: Si las prácticas higiénicas no son estrictas, existe riesgo real de transmisión de enfermedades graves por vía sanguínea, tales como la Hepatitis B, Hepatitis C y el Virus de la Inmunodeficiencia Humana (VIH). VOD INK garantiza el uso estricto de material estéril de un solo uso para anular este riesgo.',
+      '4. Riesgo de transmisión de patógenos: Si las prácticas higiénicas no son estrictas, existe riesgo real de transmisión de enfermedades graves por vía sanguínea, tales como la Hepatitis B, Hepatitis C y el Virus de la Inmunodeficiencia Humana (VIH). El establecimiento garantiza el uso estricto de material estéril de un solo uso para anular este riesgo.',
     ]
   },
   seccionJ: {
@@ -77,6 +77,6 @@ export const LEGAL_SECTIONS = {
   },
   privacidad: {
     titulo: 'POLÍTICA DE PRIVACIDAD Y PROTECCIÓN DE DATOS (RGPD)',
-    texto: 'De conformidad con el Reglamento General de Protección de Datos (RGPD) y la LOPDGDD, le informamos que los datos personales y de salud recabados en este documento serán tratados por VOD INK STUDIO S.L. con la exclusiva finalidad de gestionar el consentimiento informado obligatorio para tratamientos de arte corporal, acreditar la madurez y la representación de menores, y posibilitar la trazabilidad sanitaria regulada por las autoridades sanitarias de Cantabria. Sus datos serán almacenados de forma segura e íntegra en la cabecera correspondiente de Google Drive del tatuador asignado y en nuestros registros internos de sanidad. No se cederán datos a terceros salvo obligación legal. Puede ejercer sus derechos de acceso, rectificación, limitación, supresión y oposición enviando un correo al estudio.'
+    texto: 'De conformidad con el Reglamento General de Protección de Datos (RGPD) y la LOPDGDD, le informamos que los datos personales y de salud recabados en este documento serán tratados por el establecimiento con la exclusiva finalidad de gestionar el consentimiento informado obligatorio para tratamientos de arte corporal, acreditar la madurez y la representación de menores, y posibilitar la trazabilidad sanitaria regulada por las autoridades sanitarias correspondientes. Sus datos serán almacenados de forma segura e íntegra en la cabecera correspondiente de Google Drive del tatuador asignado y en nuestros registros internos de sanidad. No se cederán datos a terceros salvo obligación legal. Puede ejercer sus derechos de acceso, rectificación, limitación, supresión y oposición enviando un correo al estudio.'
   }
 };
