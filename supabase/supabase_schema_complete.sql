@@ -5,12 +5,25 @@
 create extension if not exists pgcrypto;
 create schema if not exists private;
 
--- 1. Enums and Custom Types
-create type public.profile_role as enum ('owner', 'artist');
-create type public.artist_status as enum ('active', 'paused');
-create type public.consent_status as enum ('draft', 'pending_technique', 'pending_artist', 'signed', 'upload_error', 'cancelled');
-create type public.notification_status as enum ('unread', 'read', 'resolved');
-create type public.notification_type as enum ('pending_signature', 'pdf_upload_error', 'consent_signed', 'incomplete_data');
+-- 1. Enums and Custom Types (Idempotent Creation)
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'profile_role' and typnamespace = 'public'::regnamespace) then
+    create type public.profile_role as enum ('owner', 'artist');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'artist_status' and typnamespace = 'public'::regnamespace) then
+    create type public.artist_status as enum ('active', 'paused');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'consent_status' and typnamespace = 'public'::regnamespace) then
+    create type public.consent_status as enum ('draft', 'pending_technique', 'pending_artist', 'signed', 'upload_error', 'cancelled');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'notification_status' and typnamespace = 'public'::regnamespace) then
+    create type public.notification_status as enum ('unread', 'read', 'resolved');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'notification_type' and typnamespace = 'public'::regnamespace) then
+    create type public.notification_type as enum ('pending_signature', 'pdf_upload_error', 'consent_signed', 'incomplete_data');
+  end if;
+end $$;
 
 -- 2. Triggers Helper Function
 create or replace function public.set_updated_at()
