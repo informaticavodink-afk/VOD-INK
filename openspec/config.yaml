@@ -1,0 +1,67 @@
+project:
+  name: Tus Consentimientos
+  slug: vod-ink
+  repository: https://github.com/informaticavodink-afk/VOD-INK.git
+  description: |
+    SaaS multi-tenant para gestión de consentimientos informados en estudios
+    de tatuaje. Evolución desde una aplicación single-studio (Vod-INK) hacia
+    una plataforma multiempresa donde un usuario puede pertenecer a varias
+    organizaciones con roles owner, admin y artist.
+
+technology:
+  frontend:
+    - React 19
+    - Vite 6
+    - TypeScript 5.8
+    - Tailwind CSS 4
+    - React Router 7
+    - React Hook Form + Zod
+  backend:
+    - Express 4
+    - Node.js 24.x
+    - tsx (dev runtime)
+  data:
+    - Supabase (Auth, PostgreSQL, Storage, Realtime)
+    - "@supabase/supabase-js 2.110"
+    - "@supabase/ssr 0.12"
+  testing:
+    typecheck: npm run lint
+    build: npm run build
+    unit: none
+    e2e: none
+
+strict_tdd:
+  enabled: false
+  test_runner: npm run lint
+  note: Strict TDD is not active for this project. Verification relies on
+    tsc --noEmit and vite build.
+
+phases:
+  default_mode: interactive
+  review_budget_lines: 400
+  chained_pr_strategy: single-pr-default
+  artifact_store: openspec
+
+constraints:
+  - The app is currently single-studio; migration must keep existing columns
+    functional during transition.
+  - Supabase is the source of truth for auth, data, storage and realtime.
+  - PDFs must be generated server-side in the future; currently generated in
+    frontend.
+  - RLS must be the real security boundary, not just UI hiding.
+  - Node.js runtime is pinned to 24.x.
+
+existing_planning_docs:
+  - docs/SDD_NEXT_STEPS.md
+  - docs/plan-refresh-automatico-tablas.md
+
+active_change:
+  name: saas-multitenant-foundation
+  description: |
+    Fase 1 de la arquitectura multiempresa: agregar tablas de organizaciones,
+    membresías, invitaciones, sedes, branding y configuración; migrar
+    profiles.studio_id + profiles.role hacia una membresía organizacional
+    manteniendo temporalmente las columnas actuales para no romper la
+    aplicación.
+  phases_completed: []
+  next_phase: proposal

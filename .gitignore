@@ -10,4 +10,5 @@ coverage/
 data/
 # Local Pi runtime state
 .atl/
+.pi/
 .pi-subagents/

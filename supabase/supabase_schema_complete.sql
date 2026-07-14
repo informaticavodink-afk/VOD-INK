@@ -10,12 +10,25 @@ drop table if exists public.consents cascade;
 drop table if exists public.artists cascade;
 drop table if exists public.profiles cascade;
 drop table if exists public.studios cascade;
+-- Multi-tenant foundation tables must also be dropped before their enums.
+drop table if exists public.organization_memberships cascade;
+drop table if exists public.organization_invitations cascade;
+drop table if exists public.locations cascade;
+drop table if exists public.organization_branding cascade;
+drop table if exists public.organization_settings cascade;
+drop table if exists public.organizations cascade;
 
 drop type if exists public.profile_role cascade;
 drop type if exists public.artist_status cascade;
 drop type if exists public.consent_status cascade;
 drop type if exists public.notification_status cascade;
 drop type if exists public.notification_type cascade;
+-- Multi-tenant foundation enums.
+drop type if exists public.platform_role cascade;
+drop type if exists public.organization_role cascade;
+drop type if exists public.membership_status cascade;
+drop type if exists public.organization_status cascade;
+drop type if exists public.invitation_status cascade;
 
 create extension if not exists pgcrypto;
 create schema if not exists private;
@@ -459,6 +472,13 @@ grant select, insert, update, delete on public.notifications to authenticated;
 grant select, insert on public.audit_logs to authenticated;
 
 -- 10. Private Storage bucket for signed consent PDFs
+-- Drop existing storage policies first so the script can be re-run.
+drop policy if exists "consent pdf owners can read studio files" on storage.objects;
+drop policy if exists "consent pdf artists can read own files" on storage.objects;
+drop policy if exists "consent pdf owners can upload studio files" on storage.objects;
+drop policy if exists "consent pdf owners can update studio files" on storage.objects;
+drop policy if exists "consent pdf owners can delete studio files" on storage.objects;
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('consent-pdfs', 'consent-pdfs', false, 10485760, array['application/pdf'])
 on conflict (id) do update
@@ -517,7 +537,379 @@ using (
   and (select private.is_studio_owner(private.safe_uuid((storage.foldername(name))[2])))
 );
 
--- 11. Enable Realtime
+-- 13. Multi-tenant foundation enums
+create type public.platform_role as enum ('user', 'super_admin');
+create type public.organization_role as enum ('owner', 'admin', 'artist');
+create type public.membership_status as enum ('active', 'inactive');
+create type public.organization_status as enum ('active', 'paused', 'suspended');
+create type public.invitation_status as enum ('pending', 'accepted', 'revoked');
+
+-- 14. Multi-tenant foundation tables
+create table public.organizations (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique,
+  name text not null,
+  status public.organization_status not null default 'active',
+  legal_name text,
+  legal_identifier text,
+  billing_email text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint organizations_slug_format check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$')
+);
+
+create table public.organization_memberships (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  role public.organization_role not null,
+  status public.membership_status not null default 'active',
+  joined_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (organization_id, user_id)
+);
+
+create table public.organization_invitations (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  email text not null,
+  role public.organization_role not null,
+  invited_by uuid not null references public.profiles(id),
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  status public.invitation_status not null default 'pending',
+  accepted_by uuid references public.profiles(id),
+  accepted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint invitations_role_check check (role in ('owner', 'admin', 'artist'))
+);
+
+create table public.locations (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  address text,
+  phone text,
+  email text,
+  status public.organization_status not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.organization_branding (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null unique references public.organizations(id) on delete cascade,
+  primary_color text,
+  secondary_color text,
+  logo_path text,
+  font_family text,
+  updated_at timestamptz not null default now()
+);
+
+create table public.organization_settings (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null unique references public.organizations(id) on delete cascade,
+  language text not null default 'es',
+  timezone text not null default 'Europe/Madrid',
+  consent_redirect_seconds int not null default 5,
+  notification_email text,
+  updated_at timestamptz not null default now()
+);
+
+-- 15. Multi-tenant foundation triggers
+create trigger organizations_set_updated_at
+  before update on public.organizations
+  for each row execute function public.set_updated_at();
+
+create trigger organization_memberships_set_updated_at
+  before update on public.organization_memberships
+  for each row execute function public.set_updated_at();
+
+create trigger organization_invitations_set_updated_at
+  before update on public.organization_invitations
+  for each row execute function public.set_updated_at();
+
+create trigger locations_set_updated_at
+  before update on public.locations
+  for each row execute function public.set_updated_at();
+
+create trigger organization_branding_set_updated_at
+  before update on public.organization_branding
+  for each row execute function public.set_updated_at();
+
+create trigger organization_settings_set_updated_at
+  before update on public.organization_settings
+  for each row execute function public.set_updated_at();
+
+-- 16. Multi-tenant foundation indexes
+create index organization_memberships_user_id_idx
+  on public.organization_memberships (user_id);
+create index organization_memberships_org_id_idx
+  on public.organization_memberships (organization_id);
+create index organization_memberships_org_role_status_idx
+  on public.organization_memberships (organization_id, role, status);
+create index organization_invitations_org_email_idx
+  on public.organization_invitations (organization_id, email);
+create index organization_invitations_token_hash_idx
+  on public.organization_invitations (token_hash);
+create index locations_organization_id_idx
+  on public.locations (organization_id);
+create index organizations_slug_idx
+  on public.organizations (slug);
+
+-- 17. Multi-tenant foundation RLS helpers
+-- Requires: schema `private` (created earlier in this script).
+create schema if not exists private;
+create or replace function private.is_platform_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.user_id = (select auth.uid())
+      and p.platform_role = 'super_admin'
+  );
+$$;
+
+create or replace function private.is_org_member(target_organization_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.organization_memberships m
+    join public.profiles p on p.id = m.user_id
+    where p.user_id = (select auth.uid())
+      and m.organization_id = target_organization_id
+      and m.status = 'active'
+  );
+$$;
+
+create or replace function private.has_org_role(
+  target_organization_id uuid,
+  roles text[]
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.organization_memberships m
+    join public.profiles p on p.id = m.user_id
+    where p.user_id = (select auth.uid())
+      and m.organization_id = target_organization_id
+      and m.status = 'active'
+      and m.role = any(roles)
+  );
+$$;
+
+create or replace function private.is_org_owner_or_admin(target_organization_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select private.has_org_role(target_organization_id, array['owner', 'admin']);
+$$;
+
+create or replace function private.current_membership_org_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select m.organization_id
+  from public.organization_memberships m
+  join public.profiles p on p.id = m.user_id
+  where p.user_id = (select auth.uid())
+    and m.status = 'active'
+  order by m.joined_at asc
+  limit 1;
+$$;
+
+grant execute on function private.is_platform_admin() to authenticated;
+grant execute on function private.is_org_member(uuid) to authenticated;
+grant execute on function private.has_org_role(uuid, text[]) to authenticated;
+grant execute on function private.is_org_owner_or_admin(uuid) to authenticated;
+grant execute on function private.current_membership_org_id() to authenticated;
+
+-- 18. Multi-tenant foundation RLS policies
+alter table public.organizations enable row level security;
+alter table public.organization_memberships enable row level security;
+alter table public.organization_invitations enable row level security;
+alter table public.locations enable row level security;
+alter table public.organization_branding enable row level security;
+alter table public.organization_settings enable row level security;
+
+create policy "organizations read authenticated"
+  on public.organizations for select
+  to authenticated
+  using (true);
+
+create policy "organizations write owner or admin"
+  on public.organizations for all
+  to authenticated
+  using ((select private.is_org_owner_or_admin(id)))
+  with check ((select private.is_org_owner_or_admin(id)));
+
+create policy "organization_memberships read authenticated"
+  on public.organization_memberships for select
+  to authenticated
+  using (true);
+
+create policy "organization_memberships write owner or admin"
+  on public.organization_memberships for all
+  to authenticated
+  using ((select private.is_org_owner_or_admin(organization_id)))
+  with check ((select private.is_org_owner_or_admin(organization_id)));
+
+create policy "organization_invitations read authenticated"
+  on public.organization_invitations for select
+  to authenticated
+  using (true);
+
+create policy "organization_invitations write owner or admin"
+  on public.organization_invitations for all
+  to authenticated
+  using ((select private.is_org_owner_or_admin(organization_id)))
+  with check ((select private.is_org_owner_or_admin(organization_id)));
+
+create policy "locations read authenticated"
+  on public.locations for select
+  to authenticated
+  using (true);
+
+create policy "locations write owner or admin"
+  on public.locations for all
+  to authenticated
+  using ((select private.is_org_owner_or_admin(organization_id)))
+  with check ((select private.is_org_owner_or_admin(organization_id)));
+
+create policy "organization_branding read authenticated"
+  on public.organization_branding for select
+  to authenticated
+  using (true);
+
+create policy "organization_branding write owner or admin"
+  on public.organization_branding for all
+  to authenticated
+  using ((select private.is_org_owner_or_admin(organization_id)))
+  with check ((select private.is_org_owner_or_admin(organization_id)));
+
+create policy "organization_settings read authenticated"
+  on public.organization_settings for select
+  to authenticated
+  using (true);
+
+create policy "organization_settings write owner or admin"
+  on public.organization_settings for all
+  to authenticated
+  using ((select private.is_org_owner_or_admin(organization_id)))
+  with check ((select private.is_org_owner_or_admin(organization_id)));
+
+grant select, insert, update, delete on public.organizations to authenticated;
+grant select, insert, update, delete on public.organization_memberships to authenticated;
+grant select, insert, update, delete on public.organization_invitations to authenticated;
+grant select, insert, update, delete on public.locations to authenticated;
+grant select, insert, update, delete on public.organization_branding to authenticated;
+grant select, insert, update, delete on public.organization_settings to authenticated;
+
+-- 19. Multi-tenant foundation back-fill
+-- Requires: public.studios and public.profiles already present.
+alter table public.profiles
+  add column if not exists platform_role public.platform_role not null default 'user';
+
+insert into public.organizations (
+  id,
+  slug,
+  name,
+  status,
+  legal_name,
+  legal_identifier,
+  billing_email
+)
+select
+  id,
+  slug,
+  coalesce(trade_name, legal_name),
+  'active',
+  legal_name,
+  tax_id,
+  null
+from public.studios
+on conflict (id) do nothing;
+
+insert into public.organizations (id, slug, name, status)
+values (
+  '00000000-0000-0000-0000-000000000000',
+  'demo-studio',
+  'Estudio Demo',
+  'active'
+)
+on conflict (id) do nothing;
+
+insert into public.organization_memberships (
+  organization_id,
+  user_id,
+  role,
+  status
+)
+select
+  p.studio_id,
+  p.id,
+  case p.role
+when 'owner' then 'owner'::public.organization_role
+when 'artist' then 'artist'::public.organization_role
+  end,
+  'active'
+from public.profiles p
+where p.studio_id is not null
+  and p.role is not null
+on conflict (organization_id, user_id) do nothing;
+
+insert into public.organization_memberships (
+  organization_id,
+  user_id,
+  role,
+  status
+)
+select
+  '00000000-0000-0000-0000-000000000000',
+  p.id,
+  'artist',
+  'active'
+from public.profiles p
+where p.studio_id is null
+on conflict (organization_id, user_id) do nothing;
+
+insert into public.organization_settings (organization_id)
+select o.id from public.organizations o
+left join public.organization_settings s on s.organization_id = o.id
+where s.id is null
+on conflict (organization_id) do nothing;
+
+insert into public.organization_branding (organization_id)
+select o.id from public.organizations o
+left join public.organization_branding b on b.organization_id = o.id
+where b.id is null
+on conflict (organization_id) do nothing;
+
+-- 20. Multi-tenant foundation seeds (re-use existing studios seed)
+-- Organizations already seeded from studios above.
+
 do $$
 begin
   if not exists (
