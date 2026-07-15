@@ -8,6 +8,19 @@ import { cancelConsentAsArtist, generateAndSubmitConsent, saveConsentTechnique, 
 
 const router = Router();
 
+async function requireUserId(req: Express.Request) {
+  const { data, error } = await req.supabase!.auth.getUser();
+  if (error || !data.user) throw new Error('No autenticado');
+  return data.user.id;
+}
+
+function getStatus(error: unknown) {
+  const message = error instanceof Error ? error.message : 'Error interno del servidor';
+  if (message === 'No autenticado') return 401;
+  if (message.includes('permisos')) return 403;
+  return 400;
+}
+
 router.post('/', async (req, res) => {
   const { state, idempotencyKey, driveAccessToken } = req.body;
 
@@ -35,11 +48,12 @@ router.patch('/:id/sign-artist', async (req, res) => {
   }
 
   try {
-    const result = await signConsentAsArtist(id, signature, driveAccessToken);
+    const userId = await requireUserId(req);
+    const result = await signConsentAsArtist(id, signature, userId, driveAccessToken);
     return res.status(200).json(result);
   } catch (err) {
     console.error('Error en PATCH /api/consents/:id/sign-artist:', err);
-    return res.status(500).json({
+    return res.status(getStatus(err)).json({
       error: err instanceof Error ? err.message : 'Error interno al firmar el consentimiento',
     });
   }
@@ -54,11 +68,12 @@ router.patch('/:id/technique', async (req, res) => {
   }
 
   try {
-    const result = await saveConsentTechnique(id, techniqueData);
+    const userId = await requireUserId(req);
+    const result = await saveConsentTechnique(id, techniqueData, userId);
     return res.status(200).json(result);
   } catch (err) {
     console.error('Error en PATCH /api/consents/:id/technique:', err);
-    return res.status(500).json({
+    return res.status(getStatus(err)).json({
       error: err instanceof Error ? err.message : 'Error interno al guardar los datos de intervención',
     });
   }
@@ -68,11 +83,12 @@ router.patch('/:id/cancel', async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await cancelConsentAsArtist(id);
+    const userId = await requireUserId(req);
+    const result = await cancelConsentAsArtist(id, userId);
     return res.status(200).json(result);
   } catch (err) {
     console.error('Error en PATCH /api/consents/:id/cancel:', err);
-    return res.status(500).json({
+    return res.status(getStatus(err)).json({
       error: err instanceof Error ? err.message : 'Error interno al descartar el consentimiento',
     });
   }

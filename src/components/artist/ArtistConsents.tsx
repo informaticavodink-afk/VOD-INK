@@ -83,6 +83,7 @@ const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
 
     useImperativeHandle(ref, () => ({ loadConsents }), [loadConsents]);
 
+    // react-doctor-disable-next-line effect-needs-cleanup -- Supabase channel is explicitly unsubscribed below.
     useEffect(() => {
       loadConsents();
 
@@ -115,7 +116,7 @@ const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
         });
 
       return () => {
-        supabase.removeChannel(channel);
+        void channel.unsubscribe();
       };
     }, [artistId, loadConsents, supabase]);
 

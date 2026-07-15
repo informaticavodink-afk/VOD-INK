@@ -52,6 +52,7 @@ export default function ArtistPage() {
     }
   }, [supabase]);
 
+  // react-doctor-disable-next-line effect-needs-cleanup -- Supabase channel is explicitly unsubscribed below.
   useEffect(() => {
     if (!user || !profile || profile.role !== 'artist') return;
 
@@ -104,7 +105,7 @@ export default function ArtistPage() {
     return () => {
       cancelled = true;
       if (channel) {
-        supabase.removeChannel(channel);
+        void channel.unsubscribe();
       }
     };
   }, [user, profile, loadPendingConsents, supabase]);

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import type { Database } from '@/src/types/supabase';
 import { Download, FileCheck2, Loader2, Search, X } from 'lucide-react';
@@ -50,9 +50,9 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
   const [zipping, setZipping] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  const loadConsents = async () => {
+  const loadConsents = useCallback(async () => {
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
@@ -69,8 +69,9 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
       setConsents(data || []);
     }
     setLoading(false);
-  };
+  }, [studioId, supabase]);
 
+  // react-doctor-disable-next-line effect-needs-cleanup -- Supabase channel is explicitly unsubscribed below.
   useEffect(() => {
     loadConsents();
 
@@ -95,9 +96,9 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
       });
 
     return () => {
-      supabase.removeChannel(channel);
+      void channel.unsubscribe();
     };
-  }, [studioId]);
+  }, [loadConsents, studioId, supabase]);
 
   const downloadPdf = async (consent: ConsentWithArtist) => {
     const { data, error } = await supabase

@@ -30,80 +30,49 @@ export default function SignaturePad({
   const [hasStroke, setHasStroke] = useState(false);
   const [isLocked, setIsLocked] = useState(() => !!initialDataUrl);
   const [previewUrl, setPreviewUrl] = useState<string | null>(initialDataUrl || null);
-  const prevInitialDataUrlRef = useRef<string | undefined>(initialDataUrl);
 
-  // Inline prop-change adjustment (avoids stale intermediate render from useEffect)
-  if (initialDataUrl !== prevInitialDataUrlRef.current) {
-    prevInitialDataUrlRef.current = initialDataUrl;
+  useEffect(() => {
     if (initialDataUrl) {
       setPreviewUrl(initialDataUrl);
       setIsLocked(true);
     }
-  }
+  }, [initialDataUrl]);
 
-  const initPad = () => {
+  // Initialize and release the canvas event handlers whenever signing is enabled.
+  useEffect(() => {
+    if (isLocked) return undefined;
+
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return undefined;
 
-    // Create the signature pad
     const pad = new SignaturePadClass(canvas, {
       backgroundColor: 'rgb(255, 255, 255)',
       penColor: 'rgb(0, 0, 0)',
       minWidth: 1.5,
       maxWidth: 4.5,
     });
+    const handleEndStroke = () => setHasStroke(!pad.isEmpty());
+    const resizeCanvas = () => {
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      canvas.width = container.clientWidth * ratio;
+      canvas.height = container.clientHeight * ratio;
+      canvas.getContext('2d')?.scale(ratio, ratio);
+      pad.clear();
+      setHasStroke(false);
+    };
 
-    pad.addEventListener('endStroke', () => {
-      setHasStroke(!pad.isEmpty());
-    });
-
+    pad.addEventListener('endStroke', handleEndStroke);
     signaturePadRef.current = pad;
     resizeCanvas();
-  };
+    window.addEventListener('resize', resizeCanvas);
 
-  const resizeCanvas = () => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container || !signaturePadRef.current) return;
-
-    // Only resize if not locked
-    if (isLocked) return;
-
-    const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    
-    // Set display size
-    const displayWidth = container.clientWidth;
-    const displayHeight = container.clientHeight;
-
-    canvas.width = displayWidth * ratio;
-    canvas.height = displayHeight * ratio;
-    
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.scale(ratio, ratio);
-    }
-
-    signaturePadRef.current.clear();
-    setHasStroke(false);
-  };
-
-  // Initialize and handle resize
-  useEffect(() => {
-    if (!isLocked) {
-      initPad();
-
-      const handleResize = () => {
-        resizeCanvas();
-      };
-
-      window.addEventListener('resize', handleResize);
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        if (signaturePadRef.current) {
-          signaturePadRef.current.off();
-        }
-      };
-    }
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      pad.removeEventListener('endStroke', handleEndStroke);
+      pad.off();
+      if (signaturePadRef.current === pad) signaturePadRef.current = null;
+    };
   }, [isLocked]);
 
   const handleClear = () => {
@@ -129,10 +98,6 @@ export default function SignaturePad({
     setIsLocked(false);
     setHasStroke(false);
     onClear();
-    // Use setTimeout to ensure canvas element renders and is selected
-    setTimeout(() => {
-      initPad();
-    }, 50);
   };
 
   return (

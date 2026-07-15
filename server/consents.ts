@@ -249,37 +249,51 @@ export async function generateAndSubmitConsent(
   });
 }
 
-export async function signConsentAsArtist(
-  consentId: string,
-  artistSignature: string,
-  driveAccessToken?: string
-): Promise<SubmitConsentResult> {
+async function getArtistConsentForUser(consentId: string, actorUserId: string) {
   const supabase = createServiceClient();
-
-  // 1. Fetch the consent
-  const { data: consent, error: fetchError } = await supabase
+  const { data: consent, error: consentError } = await supabase
     .from('consents')
     .select('*')
     .eq('id', consentId)
     .single();
 
-  if (fetchError || !consent) {
-    throw new Error('Consentimiento no encontrado');
-  }
+  if (consentError || !consent) throw new Error('Consentimiento no encontrado');
 
-  // 2. Fetch the artist
   const { data: artist, error: artistError } = await supabase
     .from('artists')
     .select('*')
     .eq('id', consent.artist_id)
     .single();
 
-  if (artistError || !artist) {
-    throw new Error('Tatuador no encontrado');
+  if (artistError || !artist?.profile_id) throw new Error('Tatuador no encontrado');
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('user_id, role')
+    .eq('id', artist.profile_id)
+    .single();
+
+  if (profileError || !profile || profile.user_id !== actorUserId || profile.role !== 'artist') {
+    throw new Error('No tienes permisos para gestionar este consentimiento');
   }
+
+  return { supabase, consent, artist };
+}
+
+export async function signConsentAsArtist(
+  consentId: string,
+  artistSignature: string,
+  actorUserId: string,
+  driveAccessToken?: string
+): Promise<SubmitConsentResult> {
+  const { supabase, consent, artist } = await getArtistConsentForUser(consentId, actorUserId);
 
   if (consent.status === 'signed') {
     throw new Error('El consentimiento ya está firmado');
+  }
+
+  if (consent.status !== 'pending_artist') {
+    throw new Error('Este consentimiento no está pendiente de firma');
   }
 
   const legalAcceptance = consent.legal_acceptance as any;
@@ -443,9 +457,14 @@ export async function signConsentAsArtist(
 
 export async function saveConsentTechnique(
   consentId: string,
-  techniqueData: any
+  techniqueData: any,
+  actorUserId: string
 ): Promise<{ success: boolean; status: string }> {
-  const supabase = createServiceClient();
+  const { supabase, consent } = await getArtistConsentForUser(consentId, actorUserId);
+
+  if (consent.status !== 'pending_technique') {
+    throw new Error('Este consentimiento no está pendiente de intervención');
+  }
 
   const { error } = await supabase
     .from('consents')
@@ -463,19 +482,10 @@ export async function saveConsentTechnique(
 }
 
 export async function cancelConsentAsArtist(
-  consentId: string
+  consentId: string,
+  actorUserId: string
 ): Promise<{ success: boolean; status: 'cancelled' }> {
-  const supabase = createServiceClient();
-
-  const { data: consent, error: fetchError } = await supabase
-    .from('consents')
-    .select('id, studio_id, artist_id, status')
-    .eq('id', consentId)
-    .single();
-
-  if (fetchError || !consent) {
-    throw new Error('Consentimiento no encontrado');
-  }
+  const { supabase, consent } = await getArtistConsentForUser(consentId, actorUserId);
 
   if (consent.status === 'signed') {
     throw new Error('No se puede descartar un consentimiento ya firmado');

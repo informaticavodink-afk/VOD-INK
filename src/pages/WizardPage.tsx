@@ -78,18 +78,26 @@ export default function WizardPage() {
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [showPopupSuccess, setShowPopupSuccess] = useState<boolean>(false);
 
-  const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const triggerValidationRef = useRef<(() => Promise<boolean>) | null>(null);
   const saveStateRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    return () => {
-      if (redirectTimerRef.current) {
-        clearInterval(redirectTimerRef.current);
-        redirectTimerRef.current = null;
-      }
-    };
-  }, []);
+    if (!submissionComplete) return undefined;
+
+    const timer = window.setInterval(() => {
+      setRedirectCountdown((previous) => Math.max(previous - 1, 0));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [submissionComplete]);
+
+  useEffect(() => {
+    if (!submissionComplete || redirectCountdown !== 0) return;
+
+    clearIdempotencyKey();
+    sessionStorage.clear();
+    window.location.reload();
+  }, [redirectCountdown, submissionComplete]);
 
   const currentWizardState: WizardState = {
     pasoActual: paso,
@@ -133,31 +141,15 @@ export default function WizardPage() {
         driveViewLink: result.driveViewLink || undefined,
       };
 
-      const existing = localStorage.getItem('vod_ink_submissions');
+      const existing = localStorage.getItem('vod_ink_submissions:v1');
       const list: Submission[] = existing ? JSON.parse(existing) : [];
       list.unshift(localSub);
-      localStorage.setItem('vod_ink_submissions', JSON.stringify(list));
+      localStorage.setItem('vod_ink_submissions:v1', JSON.stringify(list));
 
       setSubmissionComplete(true);
       setRedirectCountdown(5);
 
-      redirectTimerRef.current = setInterval(() => {
-        setRedirectCountdown((previous) => {
-          if (previous <= 1) {
-            if (redirectTimerRef.current) {
-              clearInterval(redirectTimerRef.current);
-              redirectTimerRef.current = null;
-            }
 
-            clearIdempotencyKey();
-            sessionStorage.clear();
-            window.location.reload();
-            return 0;
-          }
-
-          return previous - 1;
-        });
-      }, 1000);
     } catch (error) {
       console.error('Fatal error submitting consent:', error);
       alert('Ocurrió un error crítico durante el envío del consentimiento. Por favor, reintente.');

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { signConsentAsArtist } from '../../../server/consents.js';
+import { createVercelSupabaseClient } from '../../../utils/supabase/vercel.js';
 import { parseBody } from '../../_lib/parseBody.js';
 
 interface SignArtistBody {
@@ -18,6 +19,13 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
   res.setHeader('Content-Type', 'application/json');
   res.statusCode = status;
   res.end(body);
+}
+
+async function requireUserId(req: IncomingMessage, res: ServerResponse) {
+  const supabase = createVercelSupabaseClient(req, res);
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) throw new Error('No autenticado');
+  return data.user.id;
 }
 
 function getIdFromUrl(url: string | undefined): string | null {
@@ -56,12 +64,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
-    const result = await signConsentAsArtist(id, signature, driveAccessToken);
+    const userId = await requireUserId(req, res);
+    const result = await signConsentAsArtist(id, signature, userId, driveAccessToken);
     sendJson(res, 200, result);
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error interno al firmar el consentimiento';
     console.error('Error en PATCH /api/consents/:id/sign-artist:', err);
-    sendJson(res, 500, {
-      error: err instanceof Error ? err.message : 'Error interno al firmar el consentimiento',
+    sendJson(res, message === 'No autenticado' ? 401 : message.includes('permisos') ? 403 : 400, {
+      error: message,
     });
   }
 }
