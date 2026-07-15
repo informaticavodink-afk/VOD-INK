@@ -5,10 +5,27 @@
 
 import React, { useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import type { AuthError } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
 
 interface LoginFormProps {
   onLogin?: () => void;
+}
+
+function getLoginErrorMessage(error: AuthError) {
+  if (error.status === 500) {
+    return 'Supabase Auth devolvió un error interno (500). La base de datos/esquema de Auth no está respondiendo correctamente. Revisa la conexión de la DB en Supabase y los logs de Auth.';
+  }
+
+  if (error.message === 'Invalid login credentials') {
+    return 'Correo o contraseña incorrectos.';
+  }
+
+  if (!error.message || error.message === '{}') {
+    return `No se pudo iniciar sesión. Detalle técnico: ${error.name}${error.status ? ` (${error.status})` : ''}`;
+  }
+
+  return error.message;
 }
 
 export default function LoginForm({ onLogin }: LoginFormProps) {
@@ -26,7 +43,8 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      setError(error.message);
+      console.error('[LoginForm] Error al iniciar sesión:', error);
+      setError(getLoginErrorMessage(error));
     } else if (onLogin) {
       onLogin();
     }
