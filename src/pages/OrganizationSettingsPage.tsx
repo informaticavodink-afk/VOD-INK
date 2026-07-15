@@ -6,6 +6,8 @@
 import React from 'react';
 import { useOrganizationContext } from '@/src/providers/OrganizationProvider';
 import OrganizationLayout from '@/src/components/layouts/OrganizationLayout';
+import ChangePasswordForm from '@/src/components/ChangePasswordForm';
+
 
 export default function OrganizationSettingsPage() {
   const { organization } = useOrganizationContext();
@@ -35,6 +37,10 @@ export default function OrganizationSettingsPage() {
             <p className="text-xs font-bold text-zinc-700">Email de facturación</p>
             <p className="text-sm text-zinc-600">{organization?.billing_email || '—'}</p>
           </div>
+        </div>
+
+        <div className="mt-8">
+          <ChangePasswordForm />
         </div>
       </div>
     </OrganizationLayout>

@@ -508,33 +508,5 @@ values (
 )
 on conflict (id) do nothing;
 
-insert into public.artists (id, studio_id, full_name, dni, qualification, drive_folder_id, status)
-values
-  (
-    '22222222-2222-4222-8222-222222222221',
-    '11111111-1111-4111-8111-111111111111',
-    'Sara Urresti Higuera',
-    '12345678X',
-    'Técnico Aplicador Homologado (Decreto 72/2006)',
-    '1_D7A9C9_SaraVodInk',
-    'active'
-  ),
-  (
-    '22222222-2222-4222-8222-222222222222',
-    '11111111-1111-4111-8111-111111111111',
-    'Alberto Ruiz Santos',
-    '87654321Y',
-    'Técnico Higienista y Aplicador (Decreto 72/2006)',
-    '1_F8B0D0_AlbertoVodInk',
-    'active'
-  ),
-  (
-    '22222222-2222-4222-8222-222222222223',
-    '11111111-1111-4111-8111-111111111111',
-    'Lucía Fernández Gómez',
-    '45678912Z',
-    'Especialista en Micropigmentación y Tatuaje',
-    '1_C5E2A1_LuciaVodInk',
-    'active'
-  )
-on conflict (id) do nothing;
+-- No artists seeded as requested by the user
+

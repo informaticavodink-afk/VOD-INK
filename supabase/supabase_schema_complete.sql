@@ -39,6 +39,11 @@ create type public.artist_status as enum ('active', 'paused');
 create type public.consent_status as enum ('draft', 'pending_technique', 'pending_artist', 'signed', 'upload_error', 'cancelled');
 create type public.notification_status as enum ('unread', 'read', 'resolved');
 create type public.notification_type as enum ('pending_signature', 'pdf_upload_error', 'consent_signed', 'incomplete_data');
+create type public.platform_role as enum ('user', 'super_admin');
+create type public.organization_role as enum ('owner', 'admin', 'artist');
+create type public.membership_status as enum ('active', 'inactive');
+create type public.organization_status as enum ('active', 'paused', 'suspended');
+create type public.invitation_status as enum ('pending', 'accepted', 'revoked');
 
 -- 2. Triggers Helper Function
 create or replace function public.set_updated_at()
@@ -76,6 +81,7 @@ create table public.profiles (
   studio_id uuid not null references public.studios(id) on delete cascade,
   role public.profile_role not null,
   full_name text not null,
+  platform_role public.platform_role not null default 'user',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint profiles_one_owner_or_artist check (role in ('owner', 'artist'))
@@ -537,12 +543,7 @@ using (
   and (select private.is_studio_owner(private.safe_uuid((storage.foldername(name))[2])))
 );
 
--- 13. Multi-tenant foundation enums
-create type public.platform_role as enum ('user', 'super_admin');
-create type public.organization_role as enum ('owner', 'admin', 'artist');
-create type public.membership_status as enum ('active', 'inactive');
-create type public.organization_status as enum ('active', 'paused', 'suspended');
-create type public.invitation_status as enum ('pending', 'accepted', 'revoked');
+-- 13. Multi-tenant foundation enums already defined at the top
 
 -- 14. Multi-tenant foundation tables
 create table public.organizations (
@@ -710,7 +711,7 @@ as $$
     where p.user_id = (select auth.uid())
       and m.organization_id = target_organization_id
       and m.status = 'active'
-      and m.role = any(roles)
+      and m.role::text = any(roles)
   );
 $$;
 
@@ -829,8 +830,6 @@ grant select, insert, update, delete on public.organization_settings to authenti
 
 -- 19. Multi-tenant foundation back-fill
 -- Requires: public.studios and public.profiles already present.
-alter table public.profiles
-  add column if not exists platform_role public.platform_role not null default 'user';
 
 insert into public.organizations (
   id,
@@ -991,33 +990,5 @@ values (
 )
 on conflict (id) do nothing;
 
-insert into public.artists (id, studio_id, full_name, dni, qualification, drive_folder_id, status)
-values
-  (
-    '22222222-2222-4222-8222-222222222221',
-    '11111111-1111-4111-8111-111111111111',
-    'Sara Urresti Higuera',
-    '12345678X',
-    'Técnico Aplicador Homologado (Decreto 72/2006)',
-    '1_D7A9C9_SaraVodInk',
-    'active'
-  ),
-  (
-    '22222222-2222-4222-8222-222222222222',
-    '11111111-1111-4111-8111-111111111111',
-    'Alberto Ruiz Santos',
-    '87654321Y',
-    'Técnico Higienista y Aplicador (Decreto 72/2006)',
-    '1_F8B0D0_AlbertoVodInk',
-    'active'
-  ),
-  (
-    '22222222-2222-4222-8222-222222222223',
-    '11111111-1111-4111-8111-111111111111',
-    'Lucía Fernández Gómez',
-    '45678912Z',
-    'Especialista en Micropigmentación y Tatuaje',
-    '1_C5E2A1_LuciaVodInk',
-    'active'
-  )
-on conflict (id) do nothing;
+-- No artists seeded as requested by the user
+

@@ -7,7 +7,9 @@ import React, { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import SuperAdminLayout from '@/src/components/layouts/SuperAdminLayout';
 import SensitiveText from '@/src/components/SensitiveText';
+import ChangePasswordForm from '@/src/components/ChangePasswordForm';
 import type { Database } from '@/src/types/supabase';
+
 
 type Organization = Database['public']['Tables']['organizations']['Row'];
 
@@ -71,6 +73,8 @@ export default function SuperAdminPage() {
             </table>
           </div>
         )}
+
+        <ChangePasswordForm />
       </div>
     </SuperAdminLayout>
   );
