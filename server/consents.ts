@@ -4,8 +4,27 @@ import { generateConsentPDF } from '../src/lib/pdf.js';
 import type { WizardState } from '../src/types';
 import path from 'path';
 import fs from 'fs';
+import { createHash } from 'crypto';
 
 const LOCAL_PDFS_DIR = path.join(process.cwd(), 'data', 'pdfs');
+
+function sha256Hex(input: Buffer | string) {
+  return createHash('sha256').update(input).digest('hex');
+}
+
+function getClientSigner(state: WizardState) {
+  return state.esMenor
+    ? {
+        signerType: 'representative' as const,
+        signerName: state.datosRepresentante.nombreYApellidos,
+        signature: state.firmaCliente,
+      }
+    : {
+        signerType: 'client' as const,
+        signerName: state.datosCliente.nombreYApellidos,
+        signature: state.firmaCliente,
+      };
+}
 
 // Local disk write — optional backup, silently skipped in serverless environments
 try {
@@ -72,11 +91,11 @@ export async function submitConsentToSupabase(
     .eq('idempotency_key', idempotencyKey)
     .maybeSingle();
 
-  if (existingConsent) {
+      if (existingConsent) {
     return {
       consentId: existingConsent.id,
       status: existingConsent.status as 'signed' | 'pending_technique' | 'pending_artist' | 'upload_error',
-      storagePath: `studios/${studioId}/artists/${artist.id}/${existingConsent.id}.pdf`,
+      storagePath: `studios/${studioId}/artists/${artist.id}/${existingConsent.id}/client-signed.pdf`,
       driveFileId: null,
       driveViewLink: null,
     };
@@ -124,8 +143,10 @@ export async function submitConsentToSupabase(
     throw new Error(`Error al guardar el consentimiento: ${consentError?.message || 'desconocido'}`);
   }
 
-  const storagePath = `studios/${studioId}/artists/${artist.id}/${consent.id}.pdf`;
+  const storagePath = `studios/${studioId}/artists/${artist.id}/${consent.id}/client-signed.pdf`;
   const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+  const pdfSha256 = sha256Hex(pdfBuffer);
+  const clientSigner = getClientSigner(state);
 
   const { error: uploadError } = await supabase.storage
     .from('consent-pdfs')
@@ -142,17 +163,40 @@ export async function submitConsentToSupabase(
     status = 'upload_error';
     await supabase.from('consents').update({ status: 'upload_error' }).eq('id', consent.id);
   } else {
-    const { error: fileRecordError } = await supabase.from('consent_files').insert({
+      const { error: fileRecordError } = await supabase.from('consent_files').insert({
       consent_id: consent.id,
       studio_id: studioId,
       artist_id: artist.id,
       storage_path: storagePath,
       file_name: fileName,
       size_bytes: pdfBuffer.length,
+      sha256: pdfSha256,
     });
 
     if (fileRecordError) {
       console.error('Error registrando consent_files:', fileRecordError);
+    }
+
+    if (clientSigner.signature?.startsWith('data:image/')) {
+      const { error: signatureError } = await supabase.from('consent_signatures').upsert(
+        {
+          consent_id: consent.id,
+          studio_id: studioId,
+          artist_id: artist.id,
+          signer_type: clientSigner.signerType,
+          signer_name: clientSigner.signerName,
+          signature_hash: sha256Hex(clientSigner.signature),
+          metadata: {
+            source: 'public_wizard',
+            storage_path: storagePath,
+          },
+        },
+        { onConflict: 'consent_id,signer_type' }
+      );
+
+      if (signatureError) {
+        console.error('Error registrando consent_signatures:', signatureError);
+      }
     }
 
     if (driveAccessToken && artist.drive_folder_id) {
@@ -234,6 +278,10 @@ export async function signConsentAsArtist(
     throw new Error('Tatuador no encontrado');
   }
 
+  if (consent.status === 'signed') {
+    throw new Error('El consentimiento ya está firmado');
+  }
+
   const legalAcceptance = consent.legal_acceptance as any;
   const clientSignature = legalAcceptance.firmaCliente || '';
 
@@ -310,15 +358,16 @@ export async function signConsentAsArtist(
     throw new Error(`Error al actualizar el estado del consentimiento: ${updateError.message}`);
   }
 
-  // 6. Overwrite the PDF in Supabase storage
-  const storagePath = `studios/${consent.studio_id}/artists/${artist.id}/${consent.id}.pdf`;
+  // 6. Store the final PDF in an immutable phase-specific path
+  const storagePath = `studios/${consent.studio_id}/artists/${artist.id}/${consent.id}/artist-signed.pdf`;
   const pdfBuffer = Buffer.from(base64, 'base64');
+  const pdfSha256 = sha256Hex(pdfBuffer);
 
   const { error: uploadError } = await supabase.storage
     .from('consent-pdfs')
     .upload(storagePath, pdfBuffer, {
       contentType: 'application/pdf',
-      upsert: true, // Overwrite
+      upsert: false,
     });
 
   let status: 'signed' | 'pending_artist' | 'upload_error' = 'signed';
@@ -330,17 +379,39 @@ export async function signConsentAsArtist(
     status = 'upload_error';
     await supabase.from('consents').update({ status: 'upload_error' }).eq('id', consentId);
   } else {
-    // Update consent_files table entry
-    const { error: fileRecordError } = await supabase
-      .from('consent_files')
-      .update({
-        file_name: fileName,
-        size_bytes: pdfBuffer.length,
-      })
-      .eq('consent_id', consentId);
+      // Insert a new file metadata row for the final signed PDF.
+      const { error: fileRecordError } = await supabase.from('consent_files').insert({
+      consent_id: consentId,
+      studio_id: consent.studio_id,
+      artist_id: artist.id,
+      storage_path: storagePath,
+      file_name: fileName,
+      size_bytes: pdfBuffer.length,
+      sha256: pdfSha256,
+    });
 
     if (fileRecordError) {
-      console.error('Error actualizando consent_files:', fileRecordError);
+      console.error('Error registrando consent_files firmado:', fileRecordError);
+    }
+
+    const { error: signatureError } = await supabase.from('consent_signatures').upsert(
+      {
+        consent_id: consentId,
+        studio_id: consent.studio_id,
+        artist_id: artist.id,
+        signer_type: 'artist',
+        signer_name: artist.full_name,
+        signature_hash: sha256Hex(artistSignature),
+        metadata: {
+          source: 'artist_panel',
+          storage_path: storagePath,
+        },
+      },
+      { onConflict: 'consent_id,signer_type' }
+    );
+
+    if (signatureError) {
+      console.error('Error registrando firma del artista:', signatureError);
     }
 
     // 7. Upload to Google Drive if active
@@ -355,11 +426,11 @@ export async function signConsentAsArtist(
         driveFileId = driveResult.driveFileId;
         driveViewLink = driveResult.driveViewLink;
 
-        if (driveFileId) {
+            if (driveFileId) {
           await supabase
             .from('consent_files')
             .update({ drive_file_id: driveFileId, drive_view_link: driveViewLink })
-            .eq('consent_id', consentId);
+            .eq('storage_path', storagePath);
         }
       } catch (driveErr) {
         console.error('Error al subir PDF firmado a Google Drive:', driveErr);

@@ -199,6 +199,38 @@ export type Database = {
 				>;
 				Relationships: [];
 			};
+			consent_signatures: {
+				Row: {
+					id: string;
+					consent_id: string;
+					studio_id: string;
+					artist_id: string | null;
+					signer_type: "client" | "representative" | "artist";
+					signer_name: string;
+					signature_storage_path: string | null;
+					signature_hash: string;
+					signed_at: string;
+					metadata: Json;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					consent_id: string;
+					studio_id: string;
+					artist_id?: string | null;
+					signer_type: "client" | "representative" | "artist";
+					signer_name: string;
+					signature_storage_path?: string | null;
+					signature_hash: string;
+					signed_at?: string;
+					metadata?: Json;
+					created_at?: string;
+				};
+				Update: Partial<
+					Database["public"]["Tables"]["consent_signatures"]["Insert"]
+				>;
+				Relationships: [];
+			};
 			notifications: {
 				Row: {
 					id: string;
