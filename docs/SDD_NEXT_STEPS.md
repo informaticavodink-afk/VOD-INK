@@ -303,7 +303,7 @@ Agregar un botón global de privacidad en header/layout:
 - Definir URL pública única del flujo cliente.
 - Incluir `studioSlug` o `studioId` en la URL.
 - Si se imprime QR, evitar parámetros frágiles o temporales.
-- Si hay múltiples estudios en el futuro, soportar multi-tenant desde el inicio.
+- El QR pertenece exclusivamente a VOD INK; no requiere selección de empresa ni soporte multi-tenant.
 
 ### Criterios de aceptación
 

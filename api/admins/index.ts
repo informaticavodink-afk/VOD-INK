@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { createServiceClient } from '../../server/supabase.js';
 import { createVercelSupabaseClient } from '../../utils/supabase/vercel.js';
 import { parseBody } from '../_lib/parseBody.js';
-import { assertCurrentUserIsSuperAdmin, createAdminUser, getErrorMessage } from '../../server/admins.js';
+import { createAdminUser, getCurrentManagerProfile, getErrorMessage } from '../../server/admins.js';
 
 function setCorsHeaders(res: ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -33,26 +33,20 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   try {
     const serviceClient = createServiceClient();
     const userSupabase = createVercelSupabaseClient(req, res);
-    await assertCurrentUserIsSuperAdmin(userSupabase, serviceClient);
-
+    const managerProfile = await getCurrentManagerProfile(userSupabase, serviceClient);
     const payload = await parseBody(req);
-    const result = await createAdminUser(payload, serviceClient);
+    const result = await createAdminUser(managerProfile, payload, serviceClient);
 
     sendJson(res, 201, {
-      user: {
-        id: result.user.id,
-        email: result.user.email,
-      },
+      user: { id: result.user.id, email: result.user.email },
       profile: result.profile,
-      membership: result.membership,
-      organization: result.organization,
     });
   } catch (error) {
     const message = getErrorMessage(error);
     const status =
       message === 'No autenticado'
         ? 401
-        : message.includes('Solo un super admin')
+        : message.includes('permisos')
           ? 403
           : 400;
 

@@ -37,7 +37,7 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Error interno del servidor';
 }
 
-async function getOwnerProfile(req: Express.Request): Promise<Profile> {
+async function getManagerProfile(req: Express.Request): Promise<Profile> {
   const { data: authData, error: authError } = await req.supabase!.auth.getUser();
 
   if (authError || !authData.user) {
@@ -54,8 +54,8 @@ async function getOwnerProfile(req: Express.Request): Promise<Profile> {
     throw new Error('No se encontró el perfil del usuario autenticado');
   }
 
-  if (profile.role !== 'owner') {
-    throw new Error('Solo el propietario puede gestionar accesos de tatuadores');
+  if (profile.role !== 'owner' && profile.role !== 'admin') {
+    throw new Error('No tienes permisos para gestionar tatuadores');
   }
 
   return profile;
@@ -158,7 +158,7 @@ async function getProfileForArtist(
 
 router.post('/', async (req, res) => {
   try {
-    const ownerProfile = await getOwnerProfile(req);
+    const ownerProfile = await getManagerProfile(req);
     const payload = req.body as ArtistPayload;
     assertRequiredArtistFields(payload);
 
@@ -190,7 +190,7 @@ router.post('/', async (req, res) => {
     return res.status(201).json({ artist });
   } catch (error) {
     const message = getErrorMessage(error);
-    const status = message === 'No autenticado' ? 401 : message.includes('Solo el propietario') ? 403 : 400;
+    const status = message === 'No autenticado' ? 401 : message.includes('permisos') ? 403 : 400;
     console.error(`[artists] POST / failed:`, error);
     return res.status(status).json({ error: message });
   }
@@ -198,7 +198,7 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', async (req, res) => {
   try {
-    const ownerProfile = await getOwnerProfile(req);
+    const ownerProfile = await getManagerProfile(req);
     const payload = req.body as ArtistPayload;
     assertRequiredArtistFields(payload);
 
@@ -279,7 +279,7 @@ router.patch('/:id', async (req, res) => {
     return res.json({ artist: updatedArtist });
   } catch (error) {
     const message = getErrorMessage(error);
-    const status = message === 'No autenticado' ? 401 : message.includes('Solo el propietario') ? 403 : 400;
+    const status = message === 'No autenticado' ? 401 : message.includes('permisos') ? 403 : 400;
     console.error(`[artists] PATCH /${req.params.id} failed:`, error);
     return res.status(status).json({ error: message });
   }
@@ -287,7 +287,7 @@ router.patch('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    const ownerProfile = await getOwnerProfile(req);
+    const ownerProfile = await getManagerProfile(req);
     const serviceClient = createServiceClient();
     const artist = await getArtistForOwner(req.params.id, ownerProfile, serviceClient);
     const profile = await getProfileForArtist(artist, serviceClient);
@@ -308,7 +308,7 @@ router.delete('/:id', async (req, res) => {
     return res.status(204).send();
   } catch (error) {
     const message = getErrorMessage(error);
-    const status = message === 'No autenticado' ? 401 : message.includes('Solo el propietario') ? 403 : 400;
+    const status = message === 'No autenticado' ? 401 : message.includes('permisos') ? 403 : 400;
     console.error(`[artists] DELETE /${req.params.id} failed:`, error);
     return res.status(status).json({ error: message });
   }

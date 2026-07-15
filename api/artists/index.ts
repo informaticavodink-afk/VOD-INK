@@ -61,8 +61,8 @@ async function getOwnerProfile(supabase: SupabaseClient<Database>): Promise<Prof
     throw new Error('No se encontró el perfil del usuario autenticado');
   }
 
-  if (profile.role !== 'owner') {
-    throw new Error('Solo el propietario puede gestionar accesos de tatuadores');
+  if (profile.role !== 'owner' && profile.role !== 'admin') {
+    throw new Error('No tienes permisos para gestionar tatuadores');
   }
 
   return profile;
@@ -171,7 +171,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   } catch (error) {
     const message = getErrorMessage(error);
     const status =
-      message === 'No autenticado' ? 401 : message.includes('Solo el propietario') ? 403 : 400;
+      message === 'No autenticado' ? 401 : message.includes('permisos') ? 403 : 400;
     console.error(`[api/artists] ${req.method} ${req.url} failed:`, error);
     sendJson(res, status, { error: message });
   }

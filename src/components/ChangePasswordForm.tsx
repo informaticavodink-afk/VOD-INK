@@ -7,9 +7,28 @@ import React, { useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { Loader2, KeyRound, CheckCircle2, AlertCircle } from 'lucide-react';
 
+function getPasswordErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('different from the old password')) {
+    return 'La nueva contraseña debe ser diferente a la que usas ahora.';
+  }
+
+  if (normalized.includes('password should be at least')) {
+    return 'La contraseña debe tener al menos 6 caracteres.';
+  }
+
+  if (normalized.includes('auth session missing') || normalized.includes('session')) {
+    return 'Tu sesión ha caducado. Cierra sesión e inicia sesión de nuevo para cambiar la contraseña.';
+  }
+
+  return 'No pudimos actualizar la contraseña. Probá de nuevo en unos minutos.';
+}
+
 export default function ChangePasswordForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPasswords, setShowPasswords] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -36,7 +55,8 @@ export default function ChangePasswordForm() {
     const { error: updateError } = await supabase.auth.updateUser({ password });
 
     if (updateError) {
-      setError(updateError.message);
+      console.error('[ChangePasswordForm] Error al actualizar contraseña:', updateError);
+      setError(getPasswordErrorMessage(updateError.message));
     } else {
       setSuccess('Tu contraseña se actualizó correctamente.');
       setPassword('');
@@ -65,12 +85,21 @@ export default function ChangePasswordForm() {
       <hr className="border-zinc-100" />
 
       <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+        <label className="flex w-fit items-center gap-2 text-xs font-medium text-zinc-700 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showPasswords}
+            onChange={(e) => setShowPasswords(e.target.checked)}
+            className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
+          />
+          Mostrar contraseñas
+        </label>
         <div className="space-y-1">
           <label className="font-sans text-[10px] font-bold uppercase tracking-wider text-zinc-700">
             Nueva contraseña
           </label>
           <input
-            type="password"
+            type={showPasswords ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -84,7 +113,7 @@ export default function ChangePasswordForm() {
             Confirmar nueva contraseña
           </label>
           <input
-            type="password"
+            type={showPasswords ? 'text' : 'password'}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required

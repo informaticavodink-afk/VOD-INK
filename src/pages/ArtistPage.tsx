@@ -203,7 +203,7 @@ export default function ArtistPage() {
     return <LoginForm />;
   }
 
-  if (profile?.role === 'owner') {
+  if (profile?.role === 'owner' || profile?.role === 'admin') {
     return <Navigate to="/admin" replace />;
   }
 

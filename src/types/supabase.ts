@@ -381,50 +381,6 @@ export type Database = {
           },
         ]
       }
-      locations: {
-        Row: {
-          address: string | null
-          created_at: string
-          email: string | null
-          id: string
-          name: string
-          organization_id: string
-          phone: string | null
-          status: Database["public"]["Enums"]["organization_status"]
-          updated_at: string
-        }
-        Insert: {
-          address?: string | null
-          created_at?: string
-          email?: string | null
-          id?: string
-          name: string
-          organization_id: string
-          phone?: string | null
-          status?: Database["public"]["Enums"]["organization_status"]
-          updated_at?: string
-        }
-        Update: {
-          address?: string | null
-          created_at?: string
-          email?: string | null
-          id?: string
-          name?: string
-          organization_id?: string
-          phone?: string | null
-          status?: Database["public"]["Enums"]["organization_status"]
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "locations_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       notifications: {
         Row: {
           artist_id: string | null
@@ -499,236 +455,11 @@ export type Database = {
           },
         ]
       }
-      organization_branding: {
-        Row: {
-          font_family: string | null
-          id: string
-          logo_path: string | null
-          organization_id: string
-          primary_color: string | null
-          secondary_color: string | null
-          updated_at: string
-        }
-        Insert: {
-          font_family?: string | null
-          id?: string
-          logo_path?: string | null
-          organization_id: string
-          primary_color?: string | null
-          secondary_color?: string | null
-          updated_at?: string
-        }
-        Update: {
-          font_family?: string | null
-          id?: string
-          logo_path?: string | null
-          organization_id?: string
-          primary_color?: string | null
-          secondary_color?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organization_branding_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: true
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organization_invitations: {
-        Row: {
-          accepted_at: string | null
-          accepted_by: string | null
-          created_at: string
-          email: string
-          expires_at: string
-          id: string
-          invited_by: string
-          organization_id: string
-          role: Database["public"]["Enums"]["organization_role"]
-          status: Database["public"]["Enums"]["invitation_status"]
-          token_hash: string
-          updated_at: string
-        }
-        Insert: {
-          accepted_at?: string | null
-          accepted_by?: string | null
-          created_at?: string
-          email: string
-          expires_at: string
-          id?: string
-          invited_by: string
-          organization_id: string
-          role: Database["public"]["Enums"]["organization_role"]
-          status?: Database["public"]["Enums"]["invitation_status"]
-          token_hash: string
-          updated_at?: string
-        }
-        Update: {
-          accepted_at?: string | null
-          accepted_by?: string | null
-          created_at?: string
-          email?: string
-          expires_at?: string
-          id?: string
-          invited_by?: string
-          organization_id?: string
-          role?: Database["public"]["Enums"]["organization_role"]
-          status?: Database["public"]["Enums"]["invitation_status"]
-          token_hash?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organization_invitations_accepted_by_fkey"
-            columns: ["accepted_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "organization_invitations_invited_by_fkey"
-            columns: ["invited_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "organization_invitations_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organization_memberships: {
-        Row: {
-          id: string
-          joined_at: string
-          organization_id: string
-          role: Database["public"]["Enums"]["organization_role"]
-          status: Database["public"]["Enums"]["membership_status"]
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          id?: string
-          joined_at?: string
-          organization_id: string
-          role: Database["public"]["Enums"]["organization_role"]
-          status?: Database["public"]["Enums"]["membership_status"]
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          id?: string
-          joined_at?: string
-          organization_id?: string
-          role?: Database["public"]["Enums"]["organization_role"]
-          status?: Database["public"]["Enums"]["membership_status"]
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organization_memberships_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "organization_memberships_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organization_settings: {
-        Row: {
-          consent_redirect_seconds: number
-          id: string
-          language: string
-          notification_email: string | null
-          organization_id: string
-          timezone: string
-          updated_at: string
-        }
-        Insert: {
-          consent_redirect_seconds?: number
-          id?: string
-          language?: string
-          notification_email?: string | null
-          organization_id: string
-          timezone?: string
-          updated_at?: string
-        }
-        Update: {
-          consent_redirect_seconds?: number
-          id?: string
-          language?: string
-          notification_email?: string | null
-          organization_id?: string
-          timezone?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organization_settings_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: true
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organizations: {
-        Row: {
-          billing_email: string | null
-          created_at: string
-          id: string
-          legal_identifier: string | null
-          legal_name: string | null
-          name: string
-          slug: string
-          status: Database["public"]["Enums"]["organization_status"]
-          updated_at: string
-        }
-        Insert: {
-          billing_email?: string | null
-          created_at?: string
-          id?: string
-          legal_identifier?: string | null
-          legal_name?: string | null
-          name: string
-          slug: string
-          status?: Database["public"]["Enums"]["organization_status"]
-          updated_at?: string
-        }
-        Update: {
-          billing_email?: string | null
-          created_at?: string
-          id?: string
-          legal_identifier?: string | null
-          legal_name?: string | null
-          name?: string
-          slug?: string
-          status?: Database["public"]["Enums"]["organization_status"]
-          updated_at?: string
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
           created_at: string
           full_name: string
           id: string
-          platform_role: Database["public"]["Enums"]["platform_role"]
           role: Database["public"]["Enums"]["profile_role"]
           studio_id: string
           updated_at: string
@@ -738,7 +469,6 @@ export type Database = {
           created_at?: string
           full_name: string
           id?: string
-          platform_role?: Database["public"]["Enums"]["platform_role"]
           role: Database["public"]["Enums"]["profile_role"]
           studio_id: string
           updated_at?: string
@@ -748,7 +478,6 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
-          platform_role?: Database["public"]["Enums"]["platform_role"]
           role?: Database["public"]["Enums"]["profile_role"]
           studio_id?: string
           updated_at?: string
@@ -839,18 +568,13 @@ export type Database = {
         | "signed"
         | "upload_error"
         | "cancelled"
-      invitation_status: "pending" | "accepted" | "revoked"
-      membership_status: "active" | "inactive"
       notification_status: "unread" | "read" | "resolved"
       notification_type:
         | "pending_signature"
         | "pdf_upload_error"
         | "consent_signed"
         | "incomplete_data"
-      organization_role: "owner" | "admin" | "artist"
-      organization_status: "active" | "paused" | "suspended"
-      platform_role: "user" | "super_admin"
-      profile_role: "owner" | "artist"
+      profile_role: "owner" | "artist" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -987,8 +711,6 @@ export const Constants = {
         "upload_error",
         "cancelled",
       ],
-      invitation_status: ["pending", "accepted", "revoked"],
-      membership_status: ["active", "inactive"],
       notification_status: ["unread", "read", "resolved"],
       notification_type: [
         "pending_signature",
@@ -996,10 +718,7 @@ export const Constants = {
         "consent_signed",
         "incomplete_data",
       ],
-      organization_role: ["owner", "admin", "artist"],
-      organization_status: ["active", "paused", "suspended"],
-      platform_role: ["user", "super_admin"],
-      profile_role: ["owner", "artist"],
+      profile_role: ["owner", "artist", "admin"],
     },
   },
 } as const

@@ -11,6 +11,7 @@ import { useProfile } from '@/src/hooks/useProfile';
 import LoginForm from '@/src/components/admin/LoginForm';
 import AdminLayout from '@/src/components/admin/AdminLayout';
 import ArtistsManager from '@/src/components/admin/ArtistsManager';
+import AdminsManager from '@/src/components/admin/AdminsManager';
 import ConsentsManager from '@/src/components/admin/ConsentsManager';
 import { Loader2, LogOut } from 'lucide-react';
 
@@ -23,7 +24,7 @@ async function handleLogout() {
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading } = useProfile(user?.id);
-  const [activeTab, setActiveTab] = useState<'artists' | 'consents'>('artists');
+  const [activeTab, setActiveTab] = useState<'admins' | 'artists' | 'consents'>('artists');
 
   if (authLoading || profileLoading) {
     return (
@@ -41,13 +42,13 @@ export default function AdminPage() {
     return <Navigate to="/artist" replace />;
   }
 
-  if (profile?.role !== 'owner') {
+  if (profile?.role !== 'owner' && profile?.role !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-6">
         <div className="max-w-sm w-full bg-white border border-red-100 p-6 rounded-2xl shadow-xl text-center">
           <h2 className="font-sans font-extrabold text-lg text-red-900">Acceso restringido</h2>
           <p className="font-sans text-sm text-red-700 mt-2">
-            No tienes permisos de propietario para acceder a este panel.
+            No tienes permisos para acceder a este panel.
           </p>
           <button
             type="button"
@@ -64,6 +65,7 @@ export default function AdminPage() {
 
   return (
     <AdminLayout profile={profile} activeTab={activeTab} onTabChange={setActiveTab}>
+      {activeTab === 'admins' && <AdminsManager studioId={profile.studio_id} />}
       {activeTab === 'artists' && <ArtistsManager studioId={profile.studio_id} />}
       {activeTab === 'consents' && <ConsentsManager studioId={profile.studio_id} />}
     </AdminLayout>
