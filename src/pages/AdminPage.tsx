@@ -5,13 +5,20 @@
 
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { createClient } from '@/utils/supabase/client';
 import { useAuth } from '@/src/hooks/useAuth';
 import { useProfile } from '@/src/hooks/useProfile';
 import LoginForm from '@/src/components/admin/LoginForm';
 import AdminLayout from '@/src/components/admin/AdminLayout';
 import ArtistsManager from '@/src/components/admin/ArtistsManager';
 import ConsentsManager from '@/src/components/admin/ConsentsManager';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LogOut } from 'lucide-react';
+
+async function handleLogout() {
+  const supabase = createClient();
+  await supabase.auth.signOut();
+  window.location.href = '/admin';
+}
 
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
@@ -42,6 +49,14 @@ export default function AdminPage() {
           <p className="font-sans text-sm text-red-700 mt-2">
             No tienes permisos de propietario para acceder a este panel.
           </p>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-950 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white transition-all hover:bg-zinc-800"
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar sesión
+          </button>
         </div>
       </div>
     );

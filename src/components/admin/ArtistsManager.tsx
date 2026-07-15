@@ -643,15 +643,6 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="font-sans text-[10px] font-bold uppercase tracking-wider text-zinc-700">ID carpeta Drive (opcional)</label>
-                <input
-                  type="text"
-                  value={form.drive_folder_id}
-                  onChange={(e) => setForm({ ...form, drive_folder_id: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950"
-                />
-              </div>
 
               <div className="flex gap-3 pt-2">
                 <button
@@ -760,33 +751,6 @@ export default function ArtistsManager({ studioId }: ArtistsManagerProps) {
                 )}
               </div>
 
-              {/* Drive Folder ID */}
-              <div className="space-y-2 border border-zinc-100 rounded-xl p-3">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={bulkEditForm.updateDriveFolder}
-                    onChange={(e) =>
-                      setBulkEditForm({ ...bulkEditForm, updateDriveFolder: e.target.checked })
-                    }
-                    className="rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer"
-                  />
-                  <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-zinc-700">
-                    Actualizar ID carpeta Drive
-                  </span>
-                </label>
-                {bulkEditForm.updateDriveFolder && (
-                  <input
-                    type="text"
-                    value={bulkEditForm.drive_folder_id}
-                    onChange={(e) =>
-                      setBulkEditForm({ ...bulkEditForm, drive_folder_id: e.target.value })
-                    }
-                    placeholder="ID de carpeta (opcional)"
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950"
-                  />
-                )}
-              </div>
 
               {/* Status */}
               <div className="space-y-2 border border-zinc-100 rounded-xl p-3">

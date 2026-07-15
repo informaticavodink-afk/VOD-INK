@@ -13,11 +13,13 @@ import { Router } from 'express';
 import { refreshSupabaseSession } from './utils/supabase/middleware';
 import consentRoutes from './server/routes/consents';
 import artistRoutes from './server/routes/artists';
+import adminRoutes from './server/routes/admins';
 
 const app = express();
 const apiRouter = Router();
 apiRouter.use('/consents', consentRoutes);
 apiRouter.use('/artists', artistRoutes);
+apiRouter.use('/admins', adminRoutes);
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Ensure local folders exist for secure backup of consents

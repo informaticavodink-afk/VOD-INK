@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import type { Database } from '@/src/types/supabase';
-import { FileText, LogOut, Users, Menu, X } from 'lucide-react';
+import { FileText, LogOut, Users, Menu, X, UserPlus } from 'lucide-react';
 import PrivacyToggle from '@/src/components/PrivacyToggle';
 import SensitiveText from '@/src/components/SensitiveText';
 import Branding from '@/src/components/Branding';
@@ -92,6 +92,7 @@ export default function AdminLayout({ profile, activeTab, onTabChange, children 
               <span>Consentimientos</span>
               <FileText className="h-4 w-4" />
             </button>
+
           </nav>
         </div>
       </aside>
@@ -111,6 +112,16 @@ export default function AdminLayout({ profile, activeTab, onTabChange, children 
           </div>
 
           <div className="flex items-center gap-4">
+            {profile.platform_role === 'super_admin' && (
+              <a
+                href="/super-admin"
+                aria-label="Crear usuario"
+                title="Crear usuario"
+                className="p-2 rounded-xl border border-zinc-200 text-zinc-950 hover:bg-zinc-50 transition-all"
+              >
+                <UserPlus className="w-4 h-4" />
+              </a>
+            )}
             <PrivacyToggle />
             <div className="text-right hidden sm:block">
               <div className="font-sans font-semibold text-xs text-zinc-900">

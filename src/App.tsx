@@ -50,7 +50,14 @@ export default function App() {
           </Route>
 
           {/* Super admin */}
-          <Route path="/super-admin" element={<SuperAdminPage />} />
+          <Route
+            path="/super-admin"
+            element={
+              <OrganizationProvider>
+                <SuperAdminPage />
+              </OrganizationProvider>
+            }
+          />
 
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

@@ -75,7 +75,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
               onChange={(e) => setEmail(e.target.value)}
               required
               className="w-full px-4 py-3 rounded-xl border border-zinc-200 bg-white text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950"
-              placeholder="admin@vodink.example"
+              placeholder="Correo"
             />
           </div>
 
@@ -89,7 +89,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
               onChange={(e) => setPassword(e.target.value)}
               required
               className="w-full px-4 py-3 rounded-xl border border-zinc-200 bg-white text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950"
-              placeholder="••••••••"
+              placeholder="Contraseña"
             />
           </div>
 

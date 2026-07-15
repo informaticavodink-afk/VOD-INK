@@ -7,7 +7,7 @@ import type React from 'react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createClient } from '@/utils/supabase/client';
-import { Building2, LogOut, Menu, X, Shield } from 'lucide-react';
+import { Building2, LogOut, Menu, X } from 'lucide-react';
 import PrivacyToggle from '@/src/components/PrivacyToggle';
 import Branding from '@/src/components/Branding';
 import { useOrganizationContext } from '@/src/providers/OrganizationProvider';
@@ -18,7 +18,12 @@ async function handleLogout() {
   window.location.href = '/';
 }
 
-export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
+interface SuperAdminLayoutProps {
+  children: React.ReactNode;
+  headerAction?: React.ReactNode;
+}
+
+export default function SuperAdminLayout({ children, headerAction }: SuperAdminLayoutProps) {
   const { isSuperAdmin } = useOrganizationContext();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -66,15 +71,6 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
           <hr className="border-zinc-100 -mx-1" />
 
-          <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
-            <Shield className="h-5 w-5 text-amber-600" />
-            <div className="flex flex-col min-w-0">
-              <span className="truncate text-xs font-bold text-amber-900">
-                Super Admin
-              </span>
-            </div>
-          </div>
-
           <nav className="grid gap-2">
             <Link
               to="/super-admin"
@@ -116,6 +112,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
           </div>
 
           <div className="flex items-center gap-4">
+            {headerAction}
             <PrivacyToggle />
           </div>
         </header>
