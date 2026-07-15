@@ -7,7 +7,7 @@ import type React from 'react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createClient } from '@/utils/supabase/client';
-import { LayoutDashboard, Building2, LogOut, Menu, X, Shield } from 'lucide-react';
+import { Building2, LogOut, Menu, X, Shield } from 'lucide-react';
 import PrivacyToggle from '@/src/components/PrivacyToggle';
 import Branding from '@/src/components/Branding';
 import { useOrganizationContext } from '@/src/providers/OrganizationProvider';

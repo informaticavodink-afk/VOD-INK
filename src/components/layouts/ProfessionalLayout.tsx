@@ -5,9 +5,9 @@
 
 import type React from 'react';
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { createClient } from '@/utils/supabase/client';
-import { FileText, FileSignature, LogOut, Menu, X, UserRound } from 'lucide-react';
+import { FileText, LogOut, Menu, X, UserRound } from 'lucide-react';
 import PrivacyToggle from '@/src/components/PrivacyToggle';
 import SensitiveText from '@/src/components/SensitiveText';
 import Branding from '@/src/components/Branding';
@@ -21,7 +21,6 @@ async function handleLogout() {
 
 export default function ProfessionalLayout({ children }: { children: React.ReactNode }) {
   const { organization, membership } = useOrganizationContext();
-  const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   if (membership?.role !== 'artist') {
