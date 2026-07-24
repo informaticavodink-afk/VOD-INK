@@ -44,7 +44,7 @@ export default function ArtistPage() {
       .from('consents')
       .select('*, studios(trade_name)')
       .eq('artist_id', artistId)
-      .in('status', ['pending_technique', 'pending_artist'])
+      .in('status', ['pending_technique', 'pending_artist', 'upload_error'])
       .order('created_at', { ascending: false });
 
     if (!error && data) {
@@ -116,19 +116,21 @@ export default function ArtistPage() {
     setInterventionError(null);
 
     try {
-      // 1. Guardar la técnica
-      const responseTech = await fetch(`/api/consents/${interveningConsent.id}/technique`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ techniqueData }),
-      });
+      // En un reintento de subida la técnica ya está validada y no debe mutar.
+      if (interveningConsent.status !== 'upload_error') {
+        const responseTech = await fetch(`/api/consents/${interveningConsent.id}/technique`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ techniqueData }),
+        });
 
-      if (!responseTech.ok) {
-        const errorData = await responseTech.json().catch(() => ({ error: 'Error al guardar la intervención' }));
-        throw new Error(errorData.error || 'Error en el servidor al guardar la intervención');
+        if (!responseTech.ok) {
+          const errorData = await responseTech.json().catch(() => ({ error: 'Error al guardar la intervención' }));
+          throw new Error(errorData.error || 'Error en el servidor al guardar la intervención');
+        }
       }
 
-      // 2. Guardar la firma
+      // Guardar la firma y finalizar el PDF
       const responseSign = await fetch(`/api/consents/${interveningConsent.id}/sign-artist`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

@@ -30,7 +30,7 @@ export interface ArtistConsentsHandle {
 }
 
 function isPendingSignatureStatus(status: Consent['status']) {
-  return status === 'pending_technique' || status === 'pending_artist';
+  return status === 'pending_technique' || status === 'pending_artist' || status === 'upload_error';
 }
 
 function getConsentStatusLabel(status: Consent['status']) {
@@ -121,10 +121,16 @@ const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
     }, [artistId, loadConsents, supabase]);
 
     const downloadPdf = async (consent: ConsentWithStudio) => {
+      if (!consent.final_file_id) {
+        setError('Este consentimiento no tiene un PDF final disponible');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('consent_files')
         .select('storage_path')
-        .eq('consent_id', consent.id)
+        .eq('id', consent.final_file_id)
+        .eq('document_kind', 'final')
         .single();
 
       if (error || !data) {
@@ -268,7 +274,7 @@ const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
                       </td>
                       <td className="px-4 py-3 text-right">
                         <SensitiveText>
-                          {consent.status === 'pending_technique' || consent.status === 'pending_artist' ? (
+                          {isPendingSignatureStatus(consent.status) ? (
                             <div className="flex justify-end gap-2">
                               <button
                                 type="button"
@@ -291,7 +297,7 @@ const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
                                 Firmar
                               </button>
                             </div>
-                          ) : consent.status === 'signed' ? (
+                          ) : consent.status === 'signed' && consent.final_file_id ? (
                             <button
                               type="button"
                               onClick={() => downloadPdf(consent)}

@@ -24,7 +24,7 @@ interface ArtistLayoutProps {
 }
 
 function isPendingSignatureStatus(status: Consent['status']) {
-  return status === 'pending_technique' || status === 'pending_artist';
+  return status === 'pending_technique' || status === 'pending_artist' || status === 'upload_error';
 }
 
 async function handleArtistLogout() {
@@ -243,7 +243,7 @@ export default function ArtistLayout({
                               <SensitiveText>{new Date(consent.created_at).toLocaleDateString('es-ES')}</SensitiveText>
                             </p>
                           </div>
-                          {consent.status === 'pending_technique' || consent.status === 'pending_artist' ? (
+                          {isPendingSignatureStatus(consent.status) ? (
                             <button
                               type="button"
                               onClick={() => {
