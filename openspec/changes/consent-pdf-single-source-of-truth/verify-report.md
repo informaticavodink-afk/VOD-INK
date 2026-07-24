@@ -9,7 +9,7 @@
 | Comando | Resultado |
 |---|---|
 | `npm run lint` | ✅ TypeScript sin errores |
-| `npm run test` | ✅ 4 archivos, 36 pruebas |
+| `npm run test` | ✅ 5 archivos, 38 pruebas |
 | `npm run test:coverage` | ✅ 98,3% líneas global; core 100% |
 | `npm run build` | ✅ Frontend y servidor construidos |
 | `git diff --check` | ✅ Sin errores de whitespace |
@@ -77,6 +77,7 @@ Proyecto verificado: `igppobmclturtmzqpcyx`.
 - ✅ Índice único, FK, check y dos triggers presentes.
 - ✅ Pruebas transaccionales confirmaron unicidad, referencia obligatoria e inmutabilidad.
 - ✅ Helpers de trigger sin `SECURITY DEFINER` y sin permiso RPC para `anon` o `authenticated`.
+- ✅ El formulario de intervención muestra y valida `posibilidadesEliminacion`; prueba de regresión confirma que un formulario completo invoca la firma.
 - ✅ El backend legado puede completar su transición a `signed` durante el rollout (prueba transaccional revertida).
 - ✅ `consent-v2` no puede quedar `signed` sin `final_file_id` (prueba transaccional revertida).
 - ✅ `supabase db push --dry-run`: base remota actualizada.

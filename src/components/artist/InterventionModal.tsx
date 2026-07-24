@@ -235,24 +235,37 @@ export default function InterventionModal({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-sans font-semibold text-zinc-500 text-[10px] uppercase tracking-wider block">
+                  <label htmlFor="intervention-duration" className="font-sans font-semibold text-zinc-500 text-[10px] uppercase tracking-wider block">
                     Duración en el tiempo
                   </label>
                   <input
+                    id="intervention-duration"
                     type="text"
                     {...register('duracion')}
+                    aria-invalid={Boolean(errors.duracion)}
                     className="w-full rounded-xl border border-zinc-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950 bg-white"
                   />
+                  {errors.duracion && (
+                    <span className="text-red-600 font-sans text-[10px] block mt-1" role="alert">{errors.duracion.message}</span>
+                  )}
                 </div>
-              </div>
 
-              <div className="pt-3 border-t border-zinc-100 space-y-1 text-left">
-                <label className="font-sans font-semibold text-zinc-400 text-[9px] uppercase tracking-wider block">
-                  Eliminación de referencia
-                </label>
-                <span className="text-[10px] text-zinc-500 block leading-tight">
-                  Se incluirá exactamente el valor indicado arriba.
-                </span>
+                <div className="space-y-1">
+                  <label htmlFor="intervention-removal" className="font-sans font-semibold text-zinc-500 text-[10px] uppercase tracking-wider block">
+                    Posibilidades de eliminación
+                  </label>
+                  <input
+                    id="intervention-removal"
+                    type="text"
+                    {...register('posibilidadesEliminacion')}
+                    aria-invalid={Boolean(errors.posibilidadesEliminacion)}
+                    placeholder="ej. Tratamiento láser especializado"
+                    className="w-full rounded-xl border border-zinc-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950 bg-white"
+                  />
+                  {errors.posibilidadesEliminacion && (
+                    <span className="text-red-600 font-sans text-[10px] block mt-1" role="alert">{errors.posibilidadesEliminacion.message}</span>
+                  )}
+                </div>
               </div>
             </div>
 
