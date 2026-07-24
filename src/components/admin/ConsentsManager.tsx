@@ -101,10 +101,16 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
   }, [loadConsents, studioId, supabase]);
 
   const downloadPdf = async (consent: ConsentWithArtist) => {
+    if (!consent.final_file_id) {
+      setError('Este consentimiento no tiene un PDF final disponible');
+      return;
+    }
+
     const { data, error } = await supabase
       .from('consent_files')
       .select('storage_path')
-      .eq('consent_id', consent.id)
+      .eq('id', consent.final_file_id)
+      .eq('document_kind', 'final')
       .single();
 
     if (error || !data) {
@@ -125,7 +131,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
   };
 
   const zipAndDownloadConsents = async (consentsToZip: ConsentWithArtist[]) => {
-    const signedConsents = consentsToZip.filter((c) => c.status === 'signed');
+    const signedConsents = consentsToZip.filter((consent) => consent.status === 'signed' && consent.final_file_id);
     const totalCount = consentsToZip.length;
     const signedCount = signedConsents.length;
 
@@ -133,7 +139,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
     setSuccessMessage(null);
 
     if (signedCount === 0) {
-      setError('No hay consentimientos completados (firmados) para exportar. Solo los registros con estado "Completado" tienen un archivo PDF disponible.');
+      setError('No hay consentimientos con un PDF final disponible para exportar.');
       return;
     }
 
@@ -141,10 +147,15 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
 
     try {
       // 1. Get storage paths for selected consents
+      const finalFileIds = signedConsents
+        .map((consent) => consent.final_file_id)
+        .filter((id): id is string => Boolean(id));
+
       const { data: files, error: filesError } = await supabase
         .from('consent_files')
-        .select('consent_id, storage_path')
-        .in('consent_id', signedConsents.map((c) => c.id));
+        .select('id, consent_id, storage_path')
+        .in('id', finalFileIds)
+        .eq('document_kind', 'final');
 
       if (filesError || !files || files.length === 0) {
         throw new Error(filesError?.message || 'No se encontraron archivos asociados a los consentimientos seleccionados.');
@@ -162,7 +173,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
         const clientNameClean = consent.client_full_name
           .trim()
           .replace(/[\/\\?%*:|"<>]/g, '_'); // Replace invalid characters
-        const filename = `Consentimiento_${clientNameClean}_${dateStr}.pdf`;
+        const filename = `Consentimiento_${clientNameClean}_${dateStr}_${consent.id.slice(0, 8)}.pdf`;
 
         const { data, error } = await supabase.storage
           .from('consent-pdfs')
@@ -407,7 +418,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <SensitiveText>
-                      {consent.status === 'signed' ? (
+                      {consent.status === 'signed' && consent.final_file_id ? (
                         <button
                           type="button"
                           onClick={() => downloadPdf(consent)}

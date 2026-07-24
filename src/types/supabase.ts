@@ -144,6 +144,7 @@ export type Database = {
           created_at: string
           drive_file_id: string | null
           drive_view_link: string | null
+          document_kind: string
           file_name: string
           id: string
           mime_type: string
@@ -159,6 +160,7 @@ export type Database = {
           created_at?: string
           drive_file_id?: string | null
           drive_view_link?: string | null
+          document_kind?: string
           file_name: string
           id?: string
           mime_type?: string
@@ -174,6 +176,7 @@ export type Database = {
           created_at?: string
           drive_file_id?: string | null
           drive_view_link?: string | null
+          document_kind?: string
           file_name?: string
           id?: string
           mime_type?: string
@@ -282,6 +285,11 @@ export type Database = {
           client_phone: string | null
           client_postal_code: string | null
           created_at: string
+          document_snapshot: Json | null
+          document_template_version: string | null
+          final_file_id: string | null
+          finalization_started_at: string | null
+          finalized_at: string | null
           health_flags: Json
           id: string
           idempotency_key: string
@@ -313,6 +321,11 @@ export type Database = {
           client_phone?: string | null
           client_postal_code?: string | null
           created_at?: string
+          document_snapshot?: Json | null
+          document_template_version?: string | null
+          final_file_id?: string | null
+          finalization_started_at?: string | null
+          finalized_at?: string | null
           health_flags?: Json
           id?: string
           idempotency_key: string
@@ -344,6 +357,11 @@ export type Database = {
           client_phone?: string | null
           client_postal_code?: string | null
           created_at?: string
+          document_snapshot?: Json | null
+          document_template_version?: string | null
+          final_file_id?: string | null
+          finalization_started_at?: string | null
+          finalized_at?: string | null
           health_flags?: Json
           id?: string
           idempotency_key?: string
@@ -365,6 +383,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "consents_final_file_id_fkey"
+            columns: ["final_file_id"]
+            isOneToOne: false
+            referencedRelation: "consent_files"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "consents_artist_id_fkey"
             columns: ["artist_id"]

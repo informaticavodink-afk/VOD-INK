@@ -15,7 +15,6 @@ import Step1Client from '../steps/Step1_Client';
 import Step3Legal from '../steps/Step3_Legal';
 import Step4Contraindications from '../steps/Step4_Contraindications';
 import Step6SignatureClient from '../steps/Step6_SignatureClient';
-import { TINTAS_PREDEFINIDAS } from '../lib/config';
 import { clearIdempotencyKey, getOrCreateIdempotencyKey, submitConsentToApi } from '../lib/submissions';
 
 // Los pasos técnicos, de presupuesto y de firma del artista se conservan fuera
@@ -44,13 +43,13 @@ const INITIAL_REPRESENTATIVE: RepresentanteLegal = {
 };
 
 const INITIAL_TECHNIQUE: Tecnica = {
-  denominacionGenerica: 'Tatuaje',
-  localizacionAnatomica: 'Antebrazo izquierdo',
-  tintas: [TINTAS_PREDEFINIDAS[0]],
-  otrosMateriales: 'Agujas estériles de un solo uso, grip desechable, vaselina filante, film osmótico, jabón syndet.',
-  duracion: 'indefinido',
-  posibilidadesEliminacion: 'Láser Q-Switched / Dermoabrasión (parcial)',
-  presupuesto: '150',
+  denominacionGenerica: '',
+  localizacionAnatomica: '',
+  tintas: [],
+  otrosMateriales: '',
+  duracion: '',
+  posibilidadesEliminacion: '',
+  presupuesto: '',
 };
 
 const TOTAL_STEPS = 4;

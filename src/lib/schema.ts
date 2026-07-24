@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { ConsentTechniqueSchema } from '../domain/consents/consentPdfSchema';
 
 // Utility to validate Spanish DNI/NIE
 export function validateDNI(dni: string): boolean {
@@ -92,17 +93,4 @@ export const RepresentanteSchema = z.object({
   acreditaMediante: z.string().min(1, 'Especifica cómo se acredita la representación'),
 });
 
-export const TechniqueSchema = z.object({
-  denominacionGenerica: z.string().min(2, 'Especifica la técnica (ej. Tatuaje, Piercing)'),
-  localizacionAnatomica: z.string().min(2, 'Especifica la zona anatómica del cuerpo'),
-  tintas: z.array(z.object({
-    nombre: z.string().min(1, 'Nombre de la tinta obligatorio'),
-    numRegistroAEMPS: z.string().min(1, 'Registro obligatorio'),
-    lote: z.string().min(1, 'Lote obligatorio'),
-    caducidad: z.string().min(1, 'Caducidad obligatoria'),
-  })).min(1, 'Añada al menos una tinta'),
-  otrosMateriales: z.string().min(1, 'Especifique otros materiales utilizados'),
-  duracion: z.string().min(1, 'Especifique la duración aproximada'),
-  posibilidadesEliminacion: z.string().min(1, 'Especifique posibilidades de eliminación'),
-  presupuesto: z.string().min(1, 'Especifique coste/presupuesto'),
-});
+export const TechniqueSchema = ConsentTechniqueSchema;

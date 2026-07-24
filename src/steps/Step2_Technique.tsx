@@ -35,7 +35,7 @@ export default function Step2Technique({
     resolver: zodResolver(TechniqueSchema),
     defaultValues: {
       ...datosTecnica,
-      tintas: datosTecnica.tintas.length > 0 ? datosTecnica.tintas : [TINTAS_PREDEFINIDAS[0]],
+      tintas: datosTecnica.tintas,
       duracion: datosTecnica.duracion || 'indefinido',
       posibilidadesEliminacion: datosTecnica.posibilidadesEliminacion || 'Láser Q-Switched / Dermoabrasión (parcial)',
       otrosMateriales: datosTecnica.otrosMateriales || 'Agujas estériles de un solo uso, grip desechable, vaselina filante, film osmótico, jabón syndet.',

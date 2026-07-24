@@ -4,9 +4,8 @@
  */
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { ESTABLECIMIENTO_VOD_INK } from './config.js';
 import { LEGAL_SECTIONS } from './legalTexts.js';
-import { WizardState } from '../types';
+import type { ConsentPdfData } from '../domain/consents/consentPdfSchema';
 
 function base64ToUint8Array(base64: string): Uint8Array {
   const rawBase64 = base64.startsWith('data:') ? base64.split(',')[1] : base64;
@@ -18,9 +17,30 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes;
 }
 
-export async function generateConsentPDF(state: WizardState): Promise<{ base64: string; blob: Blob; fileName: string }> {
+export async function generateConsentPDF(document: ConsentPdfData): Promise<{ base64: string; blob: Blob; fileName: string }> {
+  const state = {
+    artistaSeleccionado: document.aplicador,
+    datosCliente: document.cliente,
+    esMenor: document.esMenor,
+    datosRepresentante: document.representante ?? {
+      nombreYApellidos: '', dni: '', fechaNacimiento: '', domicilio: '', cp: '', localidad: '', telefono: '', parentesco: '', acreditaMediante: '',
+    },
+    datosTecnica: document.tecnica,
+    declaracionSaludSeleccionadas: document.salud,
+    confirmadoPrecio: document.confirmadoPrecio,
+    firmaCliente: document.firmaCliente,
+    firmaAplicador: document.firmaAplicador,
+    lugar: document.lugar,
+    fecha: document.fecha,
+  };
   const pdfDoc = await PDFDocument.create();
-  
+  const generatedAt = new Date(document.generatedAt);
+  pdfDoc.setCreationDate(generatedAt);
+  pdfDoc.setModificationDate(generatedAt);
+  pdfDoc.setProducer('VOD INK Consent Service');
+  pdfDoc.setCreator('VOD INK Consent Service');
+  pdfDoc.setTitle(`Consentimiento ${document.cliente.nombreYApellidos}`);
+
   // Use standard Helvetica and Helvetica-Bold fonts
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -46,7 +66,7 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
 
   // Helper to add a centered, italic footer to pages
   const drawPageFooter = (pageObj: any, pageNum: number, totalPages: number) => {
-    const footerText = `ESTUDIO DE TATUAJE  |  Documento de Consentimiento Informado  |  Página ${pageNum} de ${totalPages}`;
+    const footerText = `${document.establecimiento.nombreComercial}  |  Documento de Consentimiento Informado  |  Página ${pageNum} de ${totalPages}`;
     const fontSize = 6.5;
     const textWidth = fontOblique.widthOfTextAtSize(footerText, fontSize);
     const x = (PAGE_WIDTH - textWidth) / 2;
@@ -110,7 +130,7 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
         color: rgb(0.05, 0.05, 0.05),
       });
 
-      page.drawText('ESTUDIO DE TATUAJE', {
+      page.drawText(document.establecimiento.nombreComercial, {
         x: MARGIN + 15,
         y: y - 22,
         size: 15,
@@ -131,7 +151,7 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
   // 2. Section A (Datos del Establecimiento)
   blocks.push({
     id: 'section_a',
-    height: 32,
+    height: 48,
     draw: (page, y) => {
       let tempY = y;
       page.drawText('A. DATOS DEL ESTABLECIMIENTO', {
@@ -143,12 +163,16 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
       });
       tempY -= 12.5;
 
-      page.drawText('aquí iría tus datos de establecimiento...', {
-        x: MARGIN + 10,
-        y: tempY - 7.5,
-        size: 7.5,
-        font: fontRegular,
-      });
+      const establishmentFields = [
+        `Razón Social: ${document.establecimiento.nombreRazonSocial}  |  CIF: ${document.establecimiento.cif}`,
+        `Domicilio: ${document.establecimiento.domicilio}, ${document.establecimiento.localidad} (${document.establecimiento.cp})`,
+        `Tlf: ${document.establecimiento.telefono}  |  Reg. Sanitario: ${document.establecimiento.numRegistroSanidad} (${document.establecimiento.fechaAutorizacion})`,
+      ];
+
+      for (const line of establishmentFields) {
+        page.drawText(line, { x: MARGIN + 10, y: tempY - 7.5, size: 7.5, font: fontRegular });
+        tempY -= 11;
+      }
     }
   });
 
@@ -167,8 +191,8 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
       tempY -= 12.5;
 
       const appFields = [
-        `Nombre y Apellidos: ${state.artistaSeleccionado?.nombreYApellidos || 'No asignado'}`,
-        `DNI/NIE: ${state.artistaSeleccionado?.dni || 'N/A'}  |  Cualificación: ${state.artistaSeleccionado?.titulacion || 'Técnico Aplicador Oficial'}`,
+        `Nombre y Apellidos: ${state.artistaSeleccionado.nombreYApellidos}`,
+        `DNI/NIE: ${state.artistaSeleccionado.dni}  |  Cualificación: ${state.artistaSeleccionado.titulacion}`,
       ];
 
       for (const line of appFields) {
@@ -232,7 +256,22 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
   });
 
   // 5. Section D, E, K (Especificaciones Técnicas + Tintas)
-  let sectionDHeight = 56 + 11 + state.datosTecnica.tintas.length * 9.5;
+  const technicalLines = [
+    `Técnica: ${state.datosTecnica.denominacionGenerica.toUpperCase()}  |  Zona anatómica: ${state.datosTecnica.localizacionAnatomica.toUpperCase()}`,
+    `Duración aprox: ${state.datosTecnica.duracion}  |  Presupuesto sesión: ${state.datosTecnica.presupuesto}`,
+    `Posibilidad desvinculación/eliminación: ${state.datosTecnica.posibilidadesEliminacion}`,
+    `Materiales auxiliares y de barrera: ${state.datosTecnica.otrosMateriales}`,
+  ].flatMap((line) => wrapText(line, fontRegular, 7, PAGE_WIDTH - MARGIN * 2 - 20));
+  const inkLines = state.datosTecnica.tintas.map((tinta, idx) =>
+    wrapText(
+      `Tinta #${idx + 1}: ${tinta.nombre}  |  Reg. AEMPS: ${tinta.numRegistroAEMPS}  |  Lote: ${tinta.lote}  |  Caducidad: ${tinta.caducidad}`,
+      fontRegular,
+      6.5,
+      PAGE_WIDTH - MARGIN * 2 - 30,
+    )
+  );
+  const sectionDHeight = 30 + technicalLines.length * 10.5 + 14 + inkLines.reduce((total, lines) => total + lines.length * 9.5, 0);
+
   blocks.push({
     id: 'section_d_e_k',
     height: sectionDHeight,
@@ -246,16 +285,8 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
       });
       tempY -= 12.5;
 
-      const techFields = [
-        `Técnica: ${state.datosTecnica.denominacionGenerica.toUpperCase()}  |  Zona anatómica: ${state.datosTecnica.localizacionAnatomica.toUpperCase()}`,
-        `Duración aprox: ${state.datosTecnica.duracion}  |  Presupuesto sesión: ${state.datosTecnica.presupuesto}`,
-        `Posibilidad desvinculación/eliminación: ${state.datosTecnica.posibilidadesEliminacion}`,
-        `Materiales auxiliares y de barrera: ${state.datosTecnica.otrosMateriales}`,
-      ];
-
-      for (const line of techFields) {
-        const txt = line.length > 105 ? line.slice(0, 102) + '...' : line;
-        page.drawText(txt, { x: MARGIN + 10, y: tempY - 7, size: 7, font: fontRegular });
+      for (const line of technicalLines) {
+        page.drawText(line, { x: MARGIN + 10, y: tempY - 7, size: 7, font: fontRegular });
         tempY -= 10.5;
       }
 
@@ -263,14 +294,11 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
       page.drawText('TINTAS / PIGMENTOS DE IMPLANTACIÓN REGISTRADOS:', { x: MARGIN + 10, y: tempY - 7, size: 7, font: fontBold });
       tempY -= 10.5;
 
-      for (const [idx, tinta] of state.datosTecnica.tintas.entries()) {
-        page.drawText(`Tinta #${idx + 1}: ${tinta.nombre}  |  Reg. AEMPS: ${tinta.numRegistroAEMPS}  |  Lote: ${tinta.lote}  |  Caducidad: ${tinta.caducidad}`, {
-          x: MARGIN + 20,
-          y: tempY - 6.5,
-          size: 6.5,
-          font: fontRegular,
-        });
-        tempY -= 9.5;
+      for (const lines of inkLines) {
+        for (const line of lines) {
+          page.drawText(line, { x: MARGIN + 20, y: tempY - 6.5, size: 6.5, font: fontRegular });
+          tempY -= 9.5;
+        }
       }
     }
   });
@@ -480,8 +508,8 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
           width: width - 20,
           height: height - 12,
         });
-      } catch (e) {
-        console.error(`Failed to embed signature for ${title}`, e);
+      } catch {
+        throw new Error(`No se pudo incorporar ${title.toLowerCase()} al PDF final`);
       }
     }
 
@@ -520,9 +548,9 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
       height: blockHeight,
       draw: async (page, y) => {
         let tempY = y;
-        const dateStr = state.fecha || new Date().toLocaleDateString('es-ES');
-        const placeStr = state.lugar || 'Santander';
-        const nombreTattoo = state.artistaSeleccionado?.nombreYApellidos || 'Aplicador';
+        const dateStr = state.fecha;
+        const placeStr = state.lugar;
+        const nombreTattoo = state.artistaSeleccionado.nombreYApellidos;
         const nombreCliente = state.datosCliente.nombreYApellidos;
 
         // --- ROW 1: General Consent ---
@@ -544,7 +572,7 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
           'EL APLICADOR:',
           nombreTattoo,
           state.firmaAplicador,
-          state.artistaSeleccionado?.dni
+          state.artistaSeleccionado.dni
         );
 
         // Draw Right: EL CLIENTE
@@ -608,7 +636,7 @@ export async function generateConsentPDF(state: WizardState): Promise<{ base64: 
             'EL APLICADOR:',
             nombreTattoo,
             state.firmaAplicador,
-            state.artistaSeleccionado?.dni
+            state.artistaSeleccionado.dni
           );
 
           // Draw Right: EL REPRESENTANTE LEGAL

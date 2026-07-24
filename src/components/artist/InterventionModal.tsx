@@ -51,20 +51,19 @@ export default function InterventionModal({
     register,
     control,
     handleSubmit,
-    trigger,
-    getValues,
+    reset,
     formState: { errors },
   } = useForm<Tecnica>({
     resolver: zodResolver(TechniqueSchema),
     defaultValues: {
-      denominacionGenerica: existingTechnique?.denominacionGenerica || 'Tatuaje',
+      denominacionGenerica: existingTechnique?.denominacionGenerica || '',
       localizacionAnatomica: existingTechnique?.localizacionAnatomica || '',
       tintas: existingTechnique?.tintas && existingTechnique.tintas.length > 0
         ? existingTechnique.tintas
         : [{ nombre: '', numRegistroAEMPS: '', lote: '', caducidad: '' }],
-      otrosMateriales: existingTechnique?.otrosMateriales || 'Agujas estériles de un solo uso, grip desechable, vaselina filante, film osmótico, jabón syndet.',
-      duracion: existingTechnique?.duracion || 'indefinido',
-      posibilidadesEliminacion: existingTechnique?.posibilidadesEliminacion || 'Láser Q-Switched / Dermoabrasión (parcial)',
+      otrosMateriales: existingTechnique?.otrosMateriales || '',
+      duracion: existingTechnique?.duracion || '',
+      posibilidadesEliminacion: existingTechnique?.posibilidadesEliminacion || '',
       presupuesto: existingTechnique?.presupuesto || '',
     },
     mode: 'onTouched',
@@ -76,13 +75,24 @@ export default function InterventionModal({
   });
 
   useEffect(() => {
-    if (isOpen) {
-      setArtistSignature('');
-      setSignatureError(null);
-      setHealthAcknowledged(false);
-      setHealthAckError(null);
-    }
-  }, [isOpen]);
+    if (!isOpen) return;
+
+    reset({
+      denominacionGenerica: existingTechnique?.denominacionGenerica || '',
+      localizacionAnatomica: existingTechnique?.localizacionAnatomica || '',
+      tintas: existingTechnique?.tintas?.length
+        ? existingTechnique.tintas
+        : [{ nombre: '', numRegistroAEMPS: '', lote: '', caducidad: '' }],
+      otrosMateriales: existingTechnique?.otrosMateriales || '',
+      duracion: existingTechnique?.duracion || '',
+      posibilidadesEliminacion: existingTechnique?.posibilidadesEliminacion || '',
+      presupuesto: existingTechnique?.presupuesto || '',
+    });
+    setArtistSignature('');
+    setSignatureError(null);
+    setHealthAcknowledged(false);
+    setHealthAckError(null);
+  }, [consent?.id, existingTechnique, isOpen, reset]);
 
   const handleAddBlankInk = () => {
     append({
@@ -158,6 +168,7 @@ export default function InterventionModal({
                     {...register('denominacionGenerica')}
                     className="w-full rounded-xl border border-zinc-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950 bg-white"
                   >
+                    <option value="">Seleccionar técnica</option>
                     <option value="Tatuaje">Tatuaje artístico</option>
                     <option value="Micropigmentación">Micropigmentación</option>
                     <option value="Piercing">Piercing / Perforación</option>
@@ -240,7 +251,7 @@ export default function InterventionModal({
                   Eliminación de referencia
                 </label>
                 <span className="text-[10px] text-zinc-500 block leading-tight">
-                  Láser Q-Switched / Dermoabrasión (parcial)
+                  Se incluirá exactamente el valor indicado arriba.
                 </span>
               </div>
             </div>
