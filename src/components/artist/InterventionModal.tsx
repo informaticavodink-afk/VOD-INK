@@ -46,6 +46,7 @@ export default function InterventionModal({
   const [signatureError, setSignatureError] = useState<string | null>(null);
   const [healthAcknowledged, setHealthAcknowledged] = useState(false);
   const [healthAckError, setHealthAckError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const {
     register,
@@ -92,6 +93,7 @@ export default function InterventionModal({
     setSignatureError(null);
     setHealthAcknowledged(false);
     setHealthAckError(null);
+    setValidationError(null);
   }, [consent?.id, existingTechnique, isOpen, reset]);
 
   const handleAddBlankInk = () => {
@@ -104,6 +106,7 @@ export default function InterventionModal({
   };
 
   const onSubmitForm = async (data: Tecnica) => {
+    setValidationError(null);
     if (healthFlags.length > 0 && !healthAcknowledged) {
       setHealthAckError('Debes confirmar que revisaste los antecedentes de salud con el cliente.');
       return;
@@ -146,7 +149,12 @@ export default function InterventionModal({
         </div>
 
         {/* Content Form Scrollable */}
-        <form onSubmit={handleSubmit(onSubmitForm)} className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50/50">
+        <form
+          onSubmit={handleSubmit(onSubmitForm, () => {
+            setValidationError('Revisa los campos marcados antes de confirmar la intervención.');
+          })}
+          className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50/50"
+        >
           {/* Bento Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
             
@@ -465,8 +473,14 @@ export default function InterventionModal({
             )}
           </div>
 
+          {validationError && (
+            <div role="alert" className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl text-left">
+              {validationError}
+            </div>
+          )}
+
           {error && (
-            <div className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl text-left">
+            <div role="alert" className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl text-left">
               {error}
             </div>
           )}

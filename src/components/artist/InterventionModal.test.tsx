@@ -61,6 +61,7 @@ describe('InterventionModal', () => {
     await user.click(screen.getByRole('button', { name: /confirmar y firmar/i }));
 
     expect(await screen.findByText('Posibilidades de eliminación es obligatorio')).toBeVisible();
+    expect(screen.getByText('Revisa los campos marcados antes de confirmar la intervención.')).toBeVisible();
   });
 
   it('envía técnica y firma cuando todos los campos visibles son válidos', async () => {
