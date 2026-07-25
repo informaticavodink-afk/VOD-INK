@@ -4,8 +4,8 @@
  */
 
 import { Router } from 'express';
-import { createServiceClient } from '../supabase';
-import { createAdminUser, getCurrentManagerProfile, getErrorMessage } from '../admins';
+import { createServiceClient } from '../supabase.js';
+import { createAdminUser, getCurrentManagerProfile, getErrorMessage } from '../admins.js';
 
 const router = Router();
 

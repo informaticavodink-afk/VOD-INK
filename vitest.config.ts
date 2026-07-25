@@ -15,6 +15,7 @@ export default defineConfig({
       reportsDirectory: 'coverage',
       include: [
         'src/domain/consents/consentPdfSchema.ts',
+        'src/domain/consents/artistConsentWorkflow.ts',
         'server/consentPdfData.ts',
         'src/lib/pdf.ts',
       ],
@@ -34,6 +35,12 @@ export default defineConfig({
         statements: 80,
         branches: 80,
         'src/domain/consents/consentPdfSchema.ts': {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        'src/domain/consents/artistConsentWorkflow.ts': {
           lines: 100,
           functions: 100,
           statements: 100,

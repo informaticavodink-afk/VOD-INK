@@ -4,8 +4,8 @@
  */
 
 import { Router } from 'express';
-import { createServiceClient } from '../supabase';
-import type { Database } from '../../src/types/supabase';
+import { createServiceClient } from '../supabase.js';
+import type { Database } from '../../src/types/supabase.js';
 
 type Artist = Database['public']['Tables']['artists']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];

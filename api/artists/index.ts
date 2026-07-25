@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { createServiceClient } from '../../server/supabase.js';
 import { createVercelSupabaseClient } from '../../utils/supabase/vercel.js';
 import { parseBody } from '../_lib/parseBody.js';
-import type { Database } from '../../src/types/supabase';
+import type { Database } from '../../src/types/supabase.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];

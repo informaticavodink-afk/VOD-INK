@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { createClient } from './server';
+import { createClient } from './server.js';
 
 // Express middleware equivalent to the Next.js session-refresh middleware.
 // Mount it on API/admin routes that need Supabase Auth cookies refreshed.

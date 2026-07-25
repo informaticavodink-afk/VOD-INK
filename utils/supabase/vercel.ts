@@ -2,7 +2,7 @@ import '../env.js';
 
 import { createServerClient } from '@supabase/ssr';
 import type { IncomingMessage, ServerResponse } from 'http';
-import type { Database } from '../../src/types/supabase';
+import type { Database } from '../../src/types/supabase.js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const supabaseKey =

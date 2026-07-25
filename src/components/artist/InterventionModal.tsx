@@ -46,6 +46,7 @@ export default function InterventionModal({
   const [signatureError, setSignatureError] = useState<string | null>(null);
   const [healthAcknowledged, setHealthAcknowledged] = useState(false);
   const [healthAckError, setHealthAckError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const {
     register,
@@ -92,6 +93,7 @@ export default function InterventionModal({
     setSignatureError(null);
     setHealthAcknowledged(false);
     setHealthAckError(null);
+    setValidationError(null);
   }, [consent?.id, existingTechnique, isOpen, reset]);
 
   const handleAddBlankInk = () => {
@@ -104,6 +106,7 @@ export default function InterventionModal({
   };
 
   const onSubmitForm = async (data: Tecnica) => {
+    setValidationError(null);
     if (healthFlags.length > 0 && !healthAcknowledged) {
       setHealthAckError('Debes confirmar que revisaste los antecedentes de salud con el cliente.');
       return;
@@ -146,7 +149,12 @@ export default function InterventionModal({
         </div>
 
         {/* Content Form Scrollable */}
-        <form onSubmit={handleSubmit(onSubmitForm)} className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50/50">
+        <form
+          onSubmit={handleSubmit(onSubmitForm, () => {
+            setValidationError('Revisa los campos marcados antes de confirmar la intervención.');
+          })}
+          className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50/50"
+        >
           {/* Bento Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
             
@@ -235,24 +243,37 @@ export default function InterventionModal({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-sans font-semibold text-zinc-500 text-[10px] uppercase tracking-wider block">
+                  <label htmlFor="intervention-duration" className="font-sans font-semibold text-zinc-500 text-[10px] uppercase tracking-wider block">
                     Duración en el tiempo
                   </label>
                   <input
+                    id="intervention-duration"
                     type="text"
                     {...register('duracion')}
+                    aria-invalid={Boolean(errors.duracion)}
                     className="w-full rounded-xl border border-zinc-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950 bg-white"
                   />
+                  {errors.duracion && (
+                    <span className="text-red-600 font-sans text-[10px] block mt-1" role="alert">{errors.duracion.message}</span>
+                  )}
                 </div>
-              </div>
 
-              <div className="pt-3 border-t border-zinc-100 space-y-1 text-left">
-                <label className="font-sans font-semibold text-zinc-400 text-[9px] uppercase tracking-wider block">
-                  Eliminación de referencia
-                </label>
-                <span className="text-[10px] text-zinc-500 block leading-tight">
-                  Se incluirá exactamente el valor indicado arriba.
-                </span>
+                <div className="space-y-1">
+                  <label htmlFor="intervention-removal" className="font-sans font-semibold text-zinc-500 text-[10px] uppercase tracking-wider block">
+                    Posibilidades de eliminación
+                  </label>
+                  <input
+                    id="intervention-removal"
+                    type="text"
+                    {...register('posibilidadesEliminacion')}
+                    aria-invalid={Boolean(errors.posibilidadesEliminacion)}
+                    placeholder="ej. Tratamiento láser especializado"
+                    className="w-full rounded-xl border border-zinc-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-950 bg-white"
+                  />
+                  {errors.posibilidadesEliminacion && (
+                    <span className="text-red-600 font-sans text-[10px] block mt-1" role="alert">{errors.posibilidadesEliminacion.message}</span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -452,8 +473,14 @@ export default function InterventionModal({
             )}
           </div>
 
+          {validationError && (
+            <div role="alert" className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl text-left">
+              {validationError}
+            </div>
+          )}
+
           {error && (
-            <div className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl text-left">
+            <div role="alert" className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl text-left">
               {error}
             </div>
           )}

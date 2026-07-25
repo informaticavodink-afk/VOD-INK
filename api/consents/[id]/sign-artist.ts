@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { signConsentAsArtist } from '../../../server/consents.js';
 import { createVercelSupabaseClient } from '../../../utils/supabase/vercel.js';
 import { parseBody } from '../../_lib/parseBody.js';
 
@@ -23,7 +22,8 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
 
 async function requireUserId(req: IncomingMessage, res: ServerResponse) {
   const supabase = createVercelSupabaseClient(req, res);
-  const { data, error } = await supabase.auth.getUser();
+  const bearerToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const { data, error } = await supabase.auth.getUser(bearerToken);
   if (error || !data.user) throw new Error('No autenticado');
   return data.user.id;
 }
@@ -65,6 +65,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     const userId = await requireUserId(req, res);
+    const { signConsentAsArtist } = await import('../../../server/consents.js');
     const result = await signConsentAsArtist(id, signature, userId, driveAccessToken);
     sendJson(res, 200, result);
   } catch (err) {

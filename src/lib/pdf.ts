@@ -5,7 +5,7 @@
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { LEGAL_SECTIONS } from './legalTexts.js';
-import type { ConsentPdfData } from '../domain/consents/consentPdfSchema';
+import type { ConsentPdfData } from '../domain/consents/consentPdfSchema.js';
 
 function base64ToUint8Array(base64: string): Uint8Array {
   const rawBase64 = base64.startsWith('data:') ? base64.split(',')[1] : base64;

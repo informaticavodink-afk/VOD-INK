@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import { ConsentTechniqueSchema } from '../domain/consents/consentPdfSchema';
+import { ConsentTechniqueSchema } from '../domain/consents/consentPdfSchema.js';
 
 // Utility to validate Spanish DNI/NIE
 export function validateDNI(dni: string): boolean {
