@@ -21,6 +21,19 @@ type Consent = Database['public']['Tables']['consents']['Row'];
 type ConsentWithStudio = Consent & { studios: { trade_name: string } | null };
 type ArtistSidebarFilter = 'all' | 'pending_signature';
 
+async function readApiError(response: Response, fallback: string) {
+  const body = await response.text();
+  if (body) {
+    try {
+      const parsed = JSON.parse(body) as { error?: string };
+      if (parsed.error) return parsed.error;
+    } catch {
+      // Vercel can return an HTML platform error before the API handler runs.
+    }
+  }
+  return `${fallback} (HTTP ${response.status})`;
+}
+
 export default function ArtistPage() {
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading } = useProfile(user?.id);
@@ -116,30 +129,35 @@ export default function ArtistPage() {
     setInterventionError(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('La sesión ha caducado. Inicia sesión de nuevo.');
+      const authenticatedHeaders = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      };
+
       // En un reintento de subida la técnica ya está validada y no debe mutar.
       if (interveningConsent.status !== 'upload_error') {
         const responseTech = await fetch(`/api/consents/${interveningConsent.id}/technique`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authenticatedHeaders,
           body: JSON.stringify({ techniqueData }),
         });
 
         if (!responseTech.ok) {
-          const errorData = await responseTech.json().catch(() => ({ error: 'Error al guardar la intervención' }));
-          throw new Error(errorData.error || 'Error en el servidor al guardar la intervención');
+          throw new Error(await readApiError(responseTech, 'Error al guardar la intervención'));
         }
       }
 
       // Guardar la firma y finalizar el PDF
       const responseSign = await fetch(`/api/consents/${interveningConsent.id}/sign-artist`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authenticatedHeaders,
         body: JSON.stringify({ signature }),
       });
 
       if (!responseSign.ok) {
-        const errorData = await responseSign.json().catch(() => ({ error: 'Error al enviar la firma' }));
-        throw new Error(errorData.error || 'Error en el servidor al firmar el documento');
+        throw new Error(await readApiError(responseSign, 'Error al firmar el documento'));
       }
 
       // Optimistic update: mark as signed locally so the UI feels instant
@@ -166,15 +184,19 @@ export default function ArtistPage() {
     setDiscardError(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('La sesión ha caducado. Inicia sesión de nuevo.');
       const response = await fetch(`/api/consents/${consent.id}/cancel`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({}),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Error al descartar el consentimiento' }));
-        throw new Error(errorData.error || 'Error al descartar el consentimiento');
+        throw new Error(await readApiError(response, 'Error al descartar el consentimiento'));
       }
 
       setPendingConsents((prev) => prev.filter((c) => c.id !== consent.id));
