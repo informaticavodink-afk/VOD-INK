@@ -9,8 +9,8 @@
 | Comando | Resultado |
 |---|---|
 | `npm run lint` | ✅ TypeScript sin errores |
-| `npm run test` | ✅ 5 archivos, 38 pruebas |
-| `npm run test:coverage` | ✅ 98,3% líneas global; core 100% |
+| `npm run test` | ✅ 6 archivos, 48 pruebas |
+| `npm run test:coverage` | ✅ 98,32% líneas global; core 100% |
 | `npm run build` | ✅ Frontend y servidor construidos |
 | `git diff --check` | ✅ Sin errores de whitespace |
 
@@ -21,7 +21,7 @@
 | Core: `consentPdfSchema.ts` | 100% | 100% | 100% | 100% |
 | Core: `consentPdfData.ts` | 100% | 100% | 100% | 100% |
 | Renderer PDF | 97,87% | 94,11% | 100% | 97,87% |
-| Total instrumentado | 98,3% | 95,14% | 100% | 98,3% |
+| Total instrumentado | 98,32% | 95,28% | 100% | 98,32% |
 
 Infraestructura (`api/**`, rutas HTTP, clientes Supabase/Drive, utilidades y bootstrap) queda explícitamente fuera de instrumentación y con umbral 0, según el alcance acordado.
 
@@ -78,6 +78,7 @@ Proyecto verificado: `igppobmclturtmzqpcyx`.
 - ✅ Pruebas transaccionales confirmaron unicidad, referencia obligatoria e inmutabilidad.
 - ✅ Helpers de trigger sin `SECURITY DEFINER` y sin permiso RPC para `anon` o `authenticated`.
 - ✅ El formulario de intervención muestra y valida `posibilidadesEliminacion`; prueba de regresión confirma que un formulario completo invoca la firma.
+- ✅ La máquina de estados no vuelve a guardar técnica en `pending_artist`/`upload_error`; 10 casos cubren persistencia y reintento de firma.
 - ✅ El backend legado puede completar su transición a `signed` durante el rollout (prueba transaccional revertida).
 - ✅ `consent-v2` no puede quedar `signed` sin `final_file_id` (prueba transaccional revertida).
 - ✅ `supabase db push --dry-run`: base remota actualizada.

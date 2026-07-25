@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { signConsentAsArtist } from '../../../server/consents.js';
 import { createVercelSupabaseClient } from '../../../utils/supabase/vercel.js';
 import { parseBody } from '../../_lib/parseBody.js';
 
@@ -66,6 +65,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     const userId = await requireUserId(req, res);
+    const { signConsentAsArtist } = await import('../../../server/consents.js');
     const result = await signConsentAsArtist(id, signature, userId, driveAccessToken);
     sendJson(res, 200, result);
   } catch (err) {

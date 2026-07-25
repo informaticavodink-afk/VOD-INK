@@ -15,6 +15,7 @@ import { createClient } from '@/utils/supabase/client';
 import type { Database } from '@/src/types/supabase';
 import InterventionModal from '../components/artist/InterventionModal';
 import ArtistConsentDetailsModal from '../components/artist/ArtistConsentDetailsModal';
+import { shouldPersistTechnique } from '../domain/consents/artistConsentWorkflow';
 
 type Artist = Database['public']['Tables']['artists']['Row'];
 type Consent = Database['public']['Tables']['consents']['Row'];
@@ -136,8 +137,9 @@ export default function ArtistPage() {
         Authorization: `Bearer ${session.access_token}`,
       };
 
-      // En un reintento de subida la técnica ya está validada y no debe mutar.
-      if (interveningConsent.status !== 'upload_error') {
+      // La técnica solo se persiste en su fase. En pending_artist y upload_error
+      // ya es inmutable y el reintento debe continuar directamente con la firma.
+      if (shouldPersistTechnique(interveningConsent.status)) {
         const responseTech = await fetch(`/api/consents/${interveningConsent.id}/technique`, {
           method: 'PATCH',
           headers: authenticatedHeaders,
@@ -147,6 +149,17 @@ export default function ArtistPage() {
         if (!responseTech.ok) {
           throw new Error(await readApiError(responseTech, 'Error al guardar la intervención'));
         }
+
+        setInterveningConsent((current) => current ? {
+          ...current,
+          technique_data: techniqueData,
+          status: 'pending_artist',
+        } : current);
+        setPendingConsents((current) => current.map((consent) => consent.id === interveningConsent.id ? {
+          ...consent,
+          technique_data: techniqueData,
+          status: 'pending_artist',
+        } : consent));
       }
 
       // Guardar la firma y finalizar el PDF
