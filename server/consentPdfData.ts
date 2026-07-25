@@ -1,5 +1,5 @@
-import type { Database } from '../src/types/supabase';
-import { parseConsentPdfData, type ConsentPdfData } from '../src/domain/consents/consentPdfSchema';
+import type { Database } from '../src/types/supabase.js';
+import { parseConsentPdfData, type ConsentPdfData } from '../src/domain/consents/consentPdfSchema.js';
 
 type ConsentRow = Database['public']['Tables']['consents']['Row'];
 type ArtistRow = Database['public']['Tables']['artists']['Row'];

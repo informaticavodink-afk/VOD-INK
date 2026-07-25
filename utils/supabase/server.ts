@@ -1,4 +1,4 @@
-import '../env';
+import '../env.js';
 
 import { createServerClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';

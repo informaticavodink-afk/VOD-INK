@@ -9,7 +9,7 @@
 | Comando | Resultado |
 |---|---|
 | `npm run lint` | ✅ TypeScript sin errores |
-| `npm run test` | ✅ 6 archivos, 48 pruebas |
+| `npm run test` | ✅ 7 archivos, 50 pruebas |
 | `npm run test:coverage` | ✅ 98,32% líneas global; core 100% |
 | `npm run build` | ✅ Frontend y servidor construidos |
 | `git diff --check` | ✅ Sin errores de whitespace |
@@ -79,6 +79,7 @@ Proyecto verificado: `igppobmclturtmzqpcyx`.
 - ✅ Helpers de trigger sin `SECURITY DEFINER` y sin permiso RPC para `anon` o `authenticated`.
 - ✅ El formulario de intervención muestra y valida `posibilidadesEliminacion`; prueba de regresión confirma que un formulario completo invoca la firma.
 - ✅ La máquina de estados no vuelve a guardar técnica en `pending_artist`/`upload_error`; 10 casos cubren persistencia y reintento de firma.
+- ✅ El grafo serverless usa extensiones ESM explícitas y carga técnica, firma y finalización tras transpilar sin bundler, reproduciendo la semántica de Vercel.
 - ✅ El backend legado puede completar su transición a `signed` durante el rollout (prueba transaccional revertida).
 - ✅ `consent-v2` no puede quedar `signed` sin `final_file_id` (prueba transaccional revertida).
 - ✅ `supabase db push --dry-run`: base remota actualizada.

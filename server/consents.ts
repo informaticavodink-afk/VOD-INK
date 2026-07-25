@@ -5,7 +5,7 @@ import { ClientSchema, RepresentanteSchema } from '../src/lib/schema.js';
 import { getArtistConsentForUser } from './artistConsent.js';
 export { saveConsentTechnique } from './artistConsent.js';
 import { buildConsentPdfData, createDocumentSnapshot } from './consentPdfData.js';
-import type { WizardState } from '../src/types';
+import type { WizardState } from '../src/types.js';
 import path from 'path';
 import fs from 'fs';
 import { createHash } from 'crypto';

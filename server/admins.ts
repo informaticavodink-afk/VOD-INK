@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '../src/types/supabase';
+import type { Database } from '../src/types/supabase.js';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 

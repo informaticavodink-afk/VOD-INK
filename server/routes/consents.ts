@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { cancelConsentAsArtist, generateAndSubmitConsent, saveConsentTechnique, signConsentAsArtist } from '../consents';
+import { cancelConsentAsArtist, generateAndSubmitConsent, saveConsentTechnique, signConsentAsArtist } from '../consents.js';
 
 const router = Router();
 
