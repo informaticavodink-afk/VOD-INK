@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { saveConsentTechnique } from '../../../server/consents.js';
+import { saveConsentTechnique } from '../../../server/artistConsent.js';
 import { createVercelSupabaseClient } from '../../../utils/supabase/vercel.js';
 import { parseBody } from '../../_lib/parseBody.js';
 
