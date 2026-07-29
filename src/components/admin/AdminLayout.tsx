@@ -39,7 +39,7 @@ export default function AdminLayout({ profile, activeTab, onTabChange, children 
     }`;
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-950 font-sans lg:flex">
+    <div className="flex h-[100dvh] min-h-0 overflow-hidden bg-zinc-50 font-sans text-zinc-950">
       {/* Backdrop overlay for mobile drawer */}
       {isMobileMenuOpen && (
         <button
@@ -121,7 +121,7 @@ export default function AdminLayout({ profile, activeTab, onTabChange, children 
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200 bg-white/90 px-5 py-5 backdrop-blur">
           <div className="flex items-center gap-3">
             <button
@@ -156,7 +156,11 @@ export default function AdminLayout({ profile, activeTab, onTabChange, children 
           </div>
         </header>
 
-        <main className="mx-auto max-w-7xl p-5 lg:p-8">{children}</main>
+        <main className="w-full min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="mx-auto max-w-7xl p-5 pb-[calc(1.25rem+var(--safe-bottom))] lg:p-8">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   );
