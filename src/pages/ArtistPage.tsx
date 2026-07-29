@@ -9,13 +9,14 @@ import { useAuth } from '@/src/hooks/useAuth';
 import { useProfile } from '@/src/hooks/useProfile';
 import LoginForm from '@/src/components/admin/LoginForm';
 import ArtistLayout from '@/src/components/artist/ArtistLayout';
-import ArtistConsents, { ArtistConsentsHandle } from '@/src/components/artist/ArtistConsents';
+import ArtistConsents, { type ArtistConsentsHandle } from '@/src/components/artist/ArtistConsents';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import type { Database } from '@/src/types/supabase';
 import InterventionModal from '../components/artist/InterventionModal';
 import ArtistConsentDetailsModal from '../components/artist/ArtistConsentDetailsModal';
 import { shouldPersistTechnique } from '../domain/consents/artistConsentWorkflow';
+import { signArtistConsent, toArtistActionError, type ArtistActionError } from '../lib/artistFinalization';
 
 type Artist = Database['public']['Tables']['artists']['Row'];
 type Consent = Database['public']['Tables']['consents']['Row'];
@@ -47,7 +48,7 @@ export default function ArtistPage() {
   // States for intervention modal
   const [interveningConsent, setInterveningConsent] = useState<ConsentWithStudio | null>(null);
   const [isSavingIntervention, setIsSavingIntervention] = useState<boolean>(false);
-  const [interventionError, setInterventionError] = useState<string | null>(null);
+  const [interventionError, setInterventionError] = useState<ArtistActionError | null>(null);
   const [isDiscardingConsent, setIsDiscardingConsent] = useState<boolean>(false);
   const [discardError, setDiscardError] = useState<string | null>(null);
 
@@ -162,16 +163,8 @@ export default function ArtistPage() {
         } : consent));
       }
 
-      // Guardar la firma y finalizar el PDF
-      const responseSign = await fetch(`/api/consents/${interveningConsent.id}/sign-artist`, {
-        method: 'PATCH',
-        headers: authenticatedHeaders,
-        body: JSON.stringify({ signature }),
-      });
-
-      if (!responseSign.ok) {
-        throw new Error(await readApiError(responseSign, 'Error al firmar el documento'));
-      }
+      // Sign and finalize the PDF; retries keep this consent ID.
+      await signArtistConsent(interveningConsent.id, signature, session.access_token);
 
       // Optimistic update: mark as signed locally so the UI feels instant
       setPendingConsents((prev) =>
@@ -186,7 +179,7 @@ export default function ArtistPage() {
         consentsRef.current?.loadConsents();
       }
     } catch (err) {
-      setInterventionError(err instanceof Error ? err.message : 'Error al guardar los datos de intervención y firma');
+      setInterventionError(toArtistActionError(err, 'Error al guardar los datos de intervención y firma'));
     } finally {
       setIsSavingIntervention(false);
     }
