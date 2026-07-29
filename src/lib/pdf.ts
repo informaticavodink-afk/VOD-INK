@@ -5,7 +5,7 @@
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { LEGAL_SECTIONS } from './legalTexts.js';
-import type { ConsentPdfData } from '../domain/consents/consentPdfSchema.js';
+import { hasLegalRepresentation, type ConsentPdfData } from '../domain/consents/consentPdfSchema.js';
 
 function base64ToUint8Array(base64: string): Uint8Array {
   const rawBase64 = base64.startsWith('data:') ? base64.split(',')[1] : base64;
@@ -18,10 +18,12 @@ function base64ToUint8Array(base64: string): Uint8Array {
 }
 
 export async function generateConsentPDF(document: ConsentPdfData): Promise<{ base64: string; blob: Blob; fileName: string }> {
+  const representation = hasLegalRepresentation(document);
   const state = {
     artistaSeleccionado: document.aplicador,
     datosCliente: document.cliente,
     esMenor: document.esMenor,
+    tieneRepresentanteLegal: representation,
     datosRepresentante: document.representante ?? {
       nombreYApellidos: '', dni: '', fechaNacimiento: '', domicilio: '', cp: '', localidad: '', telefono: '', parentesco: '', acreditaMediante: '',
     },
@@ -204,8 +206,8 @@ export async function generateConsentPDF(document: ConsentPdfData): Promise<{ ba
 
   // 4. Section C (Filiación)
   let sectionCHeight = 48;
-  if (state.esMenor) {
-    sectionCHeight += 43;
+  if (state.tieneRepresentanteLegal) {
+    sectionCHeight += 53;
   }
   blocks.push({
     id: 'section_c',
@@ -231,9 +233,9 @@ export async function generateConsentPDF(document: ConsentPdfData): Promise<{ ba
         tempY -= 11;
       }
 
-      if (state.esMenor) {
+      if (state.tieneRepresentanteLegal) {
         tempY -= 4;
-        page.drawText('REPRESENTACIÓN LEGAL ACREDITADA (CLIENTE MENOR O INCAPACITADO):', {
+        page.drawText('REPRESENTACIÓN LEGAL ACREDITADA:', {
           x: MARGIN + 10,
           y: tempY - 7.5,
           size: 7.5,
@@ -243,6 +245,7 @@ export async function generateConsentPDF(document: ConsentPdfData): Promise<{ ba
 
         const repFields = [
           `Representante: ${state.datosRepresentante.nombreYApellidos.toUpperCase()}  |  DNI/NIE: ${state.datosRepresentante.dni.toUpperCase()}`,
+          `F. Nacimiento: ${state.datosRepresentante.fechaNacimiento}  |  Tlf: ${state.datosRepresentante.telefono}`,
           `Domicilio: ${state.datosRepresentante.domicilio}, ${state.datosRepresentante.localidad} (${state.datosRepresentante.cp})`,
           `Parentesco/Tutela: ${state.datosRepresentante.parentesco}  |  Acreditación: ${state.datosRepresentante.acreditaMediante.replace(/_/g, ' ')}`,
         ];
@@ -539,7 +542,7 @@ export async function generateConsentPDF(document: ConsentPdfData): Promise<{ ba
     const boxWidth = (PAGE_WIDTH - MARGIN * 2 - 25) / 2; // ~250pt each
 
     let blockHeight = 120;
-    if (state.esMenor) {
+    if (state.tieneRepresentanteLegal && state.esMenor) {
       blockHeight = 290;
     }
 
@@ -575,21 +578,22 @@ export async function generateConsentPDF(document: ConsentPdfData): Promise<{ ba
           state.artistaSeleccionado.dni
         );
 
-        // Draw Right: EL CLIENTE
+        // Draw the consenting party; represented adults use the representative as sole signer.
+        const representedAdult = state.tieneRepresentanteLegal && !state.esMenor;
         await drawSignatureBox(
           page,
           PAGE_WIDTH - MARGIN - boxWidth,
           tempY,
           boxWidth,
           boxHeight,
-          'EL CLIENTE:',
-          nombreCliente,
+          representedAdult ? 'EL REPRESENTANTE LEGAL:' : 'EL CLIENTE:',
+          representedAdult ? state.datosRepresentante.nombreYApellidos : nombreCliente,
           state.esMenor ? '' : state.firmaCliente,
-          state.datosCliente.dni
+          representedAdult ? state.datosRepresentante.dni : state.datosCliente.dni
         );
 
         // --- ROW 2: Minor representation (if applicable) ---
-        if (state.esMenor) {
+        if (state.tieneRepresentanteLegal && state.esMenor) {
           tempY -= (boxHeight + 32); // extra room for name + DNI below the boxes
 
           // Section Title

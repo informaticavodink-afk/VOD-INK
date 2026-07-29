@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const CONSENT_PDF_TEMPLATE_VERSION = 'consent-v3-representation';
+
 const requiredText = (label: string) => z.string().trim().min(1, `${label} es obligatorio`);
 const forbiddenPlaceholder = /aquí iría|\[[^\]]+\]|no asignado|^n\/?a$|tatuador ejemplo|^0{8}[a-z]$/i;
 
@@ -67,6 +69,7 @@ export const ConsentPdfDataSchema = z.object({
   }).strict(),
   cliente: personSchema,
   esMenor: z.boolean(),
+  tieneRepresentanteLegal: z.boolean().optional(),
   representante: representativeSchema.nullable(),
   tecnica: ConsentTechniqueSchema,
   salud: z.array(z.string().trim().min(1)),
@@ -77,6 +80,22 @@ export const ConsentPdfDataSchema = z.object({
   lugar: safeText('Lugar de firma'),
   fecha: safeText('Fecha de firma'),
 }).strict().superRefine((data, context) => {
+  const isV3 = data.templateVersion === CONSENT_PDF_TEMPLATE_VERSION;
+  if (isV3 && typeof data.tieneRepresentanteLegal !== 'boolean') {
+    context.addIssue({ code: 'custom', path: ['tieneRepresentanteLegal'], message: 'La representación legal debe estar indicada' });
+  }
+  if (isV3) {
+    if (data.esMenor && data.tieneRepresentanteLegal !== true) {
+      context.addIssue({ code: 'custom', path: ['tieneRepresentanteLegal'], message: 'Los menores requieren representación legal' });
+    }
+    if (data.tieneRepresentanteLegal === true && !data.representante) {
+      context.addIssue({ code: 'custom', path: ['representante'], message: 'El representante legal es obligatorio' });
+    }
+    if (data.tieneRepresentanteLegal !== true && data.representante) {
+      context.addIssue({ code: 'custom', path: ['representante'], message: 'El representante solo puede existir cuando hay representación legal' });
+    }
+    return;
+  }
   if (data.esMenor && !data.representante) {
     context.addIssue({ code: 'custom', path: ['representante'], message: 'El representante legal es obligatorio' });
   }
@@ -87,6 +106,12 @@ export const ConsentPdfDataSchema = z.object({
 
 export type ConsentTechnique = z.infer<typeof ConsentTechniqueSchema>;
 export type ConsentPdfData = z.infer<typeof ConsentPdfDataSchema>;
+
+export function hasLegalRepresentation(document: Pick<ConsentPdfData, 'templateVersion' | 'tieneRepresentanteLegal' | 'representante'>) {
+  return document.templateVersion === CONSENT_PDF_TEMPLATE_VERSION
+    ? document.tieneRepresentanteLegal === true
+    : document.representante !== null;
+}
 
 export function parseConsentPdfData(input: unknown): ConsentPdfData {
   return ConsentPdfDataSchema.parse(input);

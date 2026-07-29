@@ -18,6 +18,21 @@ function createDocument(): ConsentPdfData {
   });
 }
 
+const representative = {
+  nombreYApellidos: 'REPRESENTANTE PARAMETRIZADA', dni: '11111111H', fechaNacimiento: '1970-01-01',
+  domicilio: 'CALLE REPRESENTANTE 4', cp: '39004', localidad: 'CIUDAD REPRESENTANTE', telefono: '600444444',
+  parentesco: 'MADRE', acreditaMediante: 'LIBRO DE FAMILIA',
+};
+
+function createV3Document(overrides: Record<string, unknown> = {}): ConsentPdfData {
+  return parseConsentPdfData({
+    ...createDocument(),
+    templateVersion: 'consent-v3-representation',
+    tieneRepresentanteLegal: false,
+    ...overrides,
+  });
+}
+
 async function extractText(base64: string) {
   const task = getDocument({ data: new Uint8Array(Buffer.from(base64, 'base64')), useSystemFonts: true });
   const pdf = await task.promise;
@@ -30,6 +45,43 @@ async function extractText(base64: string) {
 }
 
 describe('generateConsentPDF', () => {
+  it('renders all three v3 representation states and visible representative fields', async () => {
+    const documents = [
+      createV3Document({ esMenor: true, tieneRepresentanteLegal: true, representante: representative }),
+      createV3Document({ esMenor: false, tieneRepresentanteLegal: false, representante: null }),
+      createV3Document({ esMenor: false, tieneRepresentanteLegal: true, representante: representative }),
+    ];
+    const extracted = await Promise.all(documents.map(async (document) => extractText((await generateConsentPDF(document)).base64)));
+
+    expect(extracted[0].text).toContain('1970-01-01');
+    expect(extracted[0].text).toContain('600444444');
+    expect(extracted[1].text).not.toContain('REPRESENTANTE PARAMETRIZADA');
+    expect(extracted[2].text).toContain('EL REPRESENTANTE LEGAL:');
+    expect(extracted[2].text).toContain('REPRESENTANTE PARAMETRIZADA');
+    expect(extracted[2].text).toContain('1970-01-01');
+    expect(extracted[2].text).toContain('600444444');
+    expect(extracted[2].text).not.toContain('EL CLIENTE:');
+  });
+
+  it('keeps long represented v3 output complete, multi-page, and deterministic', async () => {
+    const document = createV3Document({
+      esMenor: false,
+      tieneRepresentanteLegal: true,
+      representante: representative,
+      tecnica: { ...createDocument().tecnica, otrosMateriales: `VALOR LARGO ${'seguro '.repeat(180)}FIN VALOR LARGO` },
+    });
+    const result = await generateConsentPDF(document);
+    const repeatedResult = await generateConsentPDF(document);
+    const { text, pageCount } = await extractText(result.base64);
+
+    expect(repeatedResult.base64).toBe(result.base64);
+    expect(text).toContain('FIN VALOR LARGO');
+    expect(text).toContain('1970-01-01');
+    expect(text).toContain('600444444');
+    expect(pageCount).toBeGreaterThanOrEqual(2);
+  });
+
+
   it('renderiza los datos canónicos sin placeholders y de forma determinista', async () => {
     const document = createDocument();
     const result = await generateConsentPDF(document);
