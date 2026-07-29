@@ -1,166 +1,209 @@
-import { createServiceClient } from './supabase.js';
-import { uploadToDrive } from './drive.js';
-import { generateConsentPDF } from '../src/lib/pdf.js';
-import { ClientSchema, RepresentanteSchema } from '../src/lib/schema.js';
-import { getArtistConsentForUser } from './artistConsent.js';
-export { saveConsentTechnique } from './artistConsent.js';
-import { buildConsentPdfData, createDocumentSnapshot } from './consentPdfData.js';
-import type { WizardState } from '../src/types.js';
-import path from 'path';
-import fs from 'fs';
-import { createHash } from 'crypto';
+import { createServiceClient } from "./supabase.js";
+import { resolveAvailablePublicArtist } from "./publicArtists.js";
+import { resolvePublicStudio } from "./publicStudio.js";
+import { uploadToDrive } from "./drive.js";
+import { generateConsentPDF } from "../src/lib/pdf.js";
+import { ClientSchema, RepresentanteSchema } from "../src/lib/schema.js";
+import { isMinorOnConsentDate } from "../src/domain/consents/age.js";
+import type { RepresentanteLegal } from "../src/types.js";
+import { getArtistConsentForUser } from "./artistConsent.js";
+export { saveConsentTechnique } from "./artistConsent.js";
+import {
+	buildConsentPdfData,
+	createDocumentSnapshot,
+} from "./consentPdfData.js";
+import type { WizardState } from "../src/types.js";
+import path from "path";
+import fs from "fs";
+import { createHash } from "crypto";
 
-const LOCAL_PDFS_DIR = path.join(process.cwd(), 'data', 'pdfs');
+const LOCAL_PDFS_DIR = path.join(process.cwd(), "data", "pdfs");
 
 export interface SubmitConsentResult {
-  consentId: string;
-  status: 'signed' | 'pending_technique' | 'pending_artist' | 'upload_error';
-  storagePath: string;
-  driveFileId: string | null;
-  driveViewLink: string | null;
+	consentId: string;
+	status: "signed" | "pending_technique" | "pending_artist" | "upload_error";
+	storagePath: string;
+	driveFileId: string | null;
+	driveViewLink: string | null;
 }
 
-function sha256Hex(input: Buffer | string) {
-  return createHash('sha256').update(input).digest('hex');
+    function sha256Hex(input: Buffer | string) {
+     return createHash("sha256").update(input).digest("hex");
+    }
+
+    export function deriveConsentRepresentation(
+	state: Pick<WizardState, "esMenor" | "tieneRepresentanteLegal" | "datosCliente"> | { fechaNacimiento: string; esMenor?: boolean; tieneRepresentanteLegal?: boolean },
+	consentDate?: string | Date,
+) {
+	const birthDate = "datosCliente" in state ? state.datosCliente.fechaNacimiento : state.fechaNacimiento;
+	const isMinor = isMinorOnConsentDate(birthDate, consentDate);
+	if (typeof state.esMenor === "boolean" && state.esMenor !== isMinor) {
+		throw new Error("La clasificación de edad del navegador no coincide con la edad derivada");
+	}
+	const represented = state.tieneRepresentanteLegal === true;
+	if (isMinor && !represented) throw new Error("Los menores requieren representación legal");
+	return { isMinor, represented };
 }
 
-function getClientSigner(state: WizardState) {
-  return state.esMenor
-    ? {
-        signerType: 'representative' as const,
-        signerName: state.datosRepresentante.nombreYApellidos,
-        signature: state.firmaCliente,
-      }
-    : {
-        signerType: 'client' as const,
-        signerName: state.datosCliente.nombreYApellidos,
-        signature: state.firmaCliente,
-      };
+export function buildRepresentativePersistence(represented: boolean, representative?: RepresentanteLegal) {
+	if (!represented) return {
+		representative_full_name: null, representative_dni: null, representative_birth_date: null,
+		representative_phone: null, representative_address: null, representative_postal_code: null,
+		representative_city: null, representative_relationship: null, representative_accreditation: null,
+	};
+	if (!representative) throw new Error("La representación requiere datos completos");
+	const validatedRepresentative = RepresentanteSchema.parse(representative);
+	return {
+		representative_full_name: validatedRepresentative.nombreYApellidos, representative_dni: validatedRepresentative.dni,
+		representative_birth_date: validatedRepresentative.fechaNacimiento, representative_phone: validatedRepresentative.telefono,
+		representative_address: validatedRepresentative.domicilio, representative_postal_code: validatedRepresentative.cp,
+		representative_city: validatedRepresentative.localidad, representative_relationship: validatedRepresentative.parentesco,
+		representative_accreditation: validatedRepresentative.acreditaMediante,
+	};
+}
+
+export function getPublicConsentSigner(
+	representative: RepresentanteLegal,
+	signature: string,
+	represented: boolean,
+	clientName = "",
+) {
+	return represented
+		? { signerType: "representative" as const, signerName: representative.nombreYApellidos, signature }
+		: { signerType: "client" as const, signerName: clientName, signature };
+}
+
+function getClientSigner(state: WizardState, represented: boolean) {
+	return getPublicConsentSigner(
+		state.datosRepresentante,
+		state.firmaCliente,
+		represented,
+		state.datosCliente.nombreYApellidos,
+	);
 }
 
 // Local disk write — optional backup, silently skipped in serverless environments
 try {
-  if (!fs.existsSync(LOCAL_PDFS_DIR)) {
-    fs.mkdirSync(LOCAL_PDFS_DIR, { recursive: true });
-  }
+	if (!fs.existsSync(LOCAL_PDFS_DIR)) {
+		fs.mkdirSync(LOCAL_PDFS_DIR, { recursive: true });
+	}
 } catch {
-  // Silently skip — read-only filesystem in serverless environments
+	// Silently skip — read-only filesystem in serverless environments
 }
 
 export async function generateAndSubmitConsent(
-  state: WizardState,
-  idempotencyKey: string,
-  _driveAccessToken?: string
+	state: WizardState,
+	idempotencyKey: string,
+	_driveAccessToken?: string,
 ): Promise<SubmitConsentResult> {
-  ClientSchema.parse(state.datosCliente);
-  if (state.esMenor) RepresentanteSchema.parse(state.datosRepresentante);
-  if (!state.declaracionLeido || !state.declaracionContraindicaciones) {
-    throw new Error('Las declaraciones legales obligatorias no están aceptadas');
-  }
-  if (!/^data:image\/png;base64,iVBORw0KGgo/.test(state.firmaCliente)) {
-    throw new Error('La firma del cliente no es una imagen PNG válida');
-  }
+	ClientSchema.parse(state.datosCliente);
+	const representation = deriveConsentRepresentation(state);
+	if (representation.represented) RepresentanteSchema.parse(state.datosRepresentante);
+	if (!state.declaracionLeido || !state.declaracionContraindicaciones) {
+		throw new Error(
+			"Las declaraciones legales obligatorias no están aceptadas",
+		);
+	}
+	if (!/^data:image\/png;base64,iVBORw0KGgo/.test(state.firmaCliente)) {
+		throw new Error("La firma del cliente no es una imagen PNG válida");
+	}
 
-  const supabase = createServiceClient();
-  const artistId = state.artistaSeleccionado?.id;
-  if (!artistId) throw new Error('No se ha seleccionado un tatuador');
+	const supabase = createServiceClient();
+	const artistId = state.artistaSeleccionado?.id;
+	if (!artistId) throw new Error("No se ha seleccionado un tatuador");
 
-  const { data: artist, error: artistError } = await supabase
-    .from('artists')
-    .select('id, studio_id, full_name, status')
-    .eq('id', artistId)
-    .single();
+	const studio = await resolvePublicStudio(supabase);
+	const artist = await resolveAvailablePublicArtist(
+		supabase,
+		studio.id,
+		artistId,
+	);
 
-  if (artistError || !artist || artist.status !== 'active') {
-    throw new Error('El tatuador seleccionado no existe o no está activo');
-  }
+	const { data: existing } = await supabase
+		.from("consents")
+		.select("id, status, final_file_id")
+		.eq("studio_id", studio.id)
+		.eq("idempotency_key", idempotencyKey)
+		.maybeSingle();
 
-  const { data: existing } = await supabase
-    .from('consents')
-    .select('id, status, final_file_id')
-    .eq('studio_id', artist.studio_id)
-    .eq('idempotency_key', idempotencyKey)
-    .maybeSingle();
+	if (existing) {
+		return {
+			consentId: existing.id,
+			status: existing.status as SubmitConsentResult["status"],
+			storagePath: "",
+			driveFileId: null,
+			driveViewLink: null,
+		};
+	}
 
-  if (existing) {
-    return {
-      consentId: existing.id,
-      status: existing.status as SubmitConsentResult['status'],
-      storagePath: '',
-      driveFileId: null,
-      driveViewLink: null,
-    };
-  }
+	const legalAcceptance = {
+		declaracionLeido: state.declaracionLeido,
+		confirmadoPrecio: state.confirmadoPrecio,
+		lugar: state.lugar,
+		fecha: state.fecha,
+		firmaCliente: state.firmaCliente,
+	};
 
-  const legalAcceptance = {
-    declaracionLeido: state.declaracionLeido,
-    confirmadoPrecio: state.confirmadoPrecio,
-    lugar: state.lugar,
-    fecha: state.fecha,
-    firmaCliente: state.firmaCliente,
-  };
+	const { data: consent, error: consentError } = await supabase
+		.from("consents")
+		.insert({
+			studio_id: studio.id,
+			artist_id: artist.id,
+			client_full_name: state.datosCliente.nombreYApellidos,
+			client_dni: state.datosCliente.dni,
+			client_birth_date: state.datosCliente.fechaNacimiento || null,
+			client_phone: state.datosCliente.telefono || null,
+			client_address: state.datosCliente.domicilio || null,
+			client_postal_code: state.datosCliente.cp || null,
+			client_city: state.datosCliente.localidad || null,
+			is_minor: representation.isMinor,
+			has_legal_representative: representation.represented,
+			...buildRepresentativePersistence(representation.represented, state.datosRepresentante),
+			health_flags: state.declaracionSaludSeleccionadas,
+			technique_data: {},
+			legal_acceptance: legalAcceptance,
+			status: "pending_technique",
+			idempotency_key: idempotencyKey,
+		})
+		.select("id")
+		.single();
 
-  const { data: consent, error: consentError } = await supabase
-    .from('consents')
-    .insert({
-      studio_id: artist.studio_id,
-      artist_id: artist.id,
-      client_full_name: state.datosCliente.nombreYApellidos,
-      client_dni: state.datosCliente.dni,
-      client_birth_date: state.datosCliente.fechaNacimiento || null,
-      client_phone: state.datosCliente.telefono || null,
-      client_address: state.datosCliente.domicilio || null,
-      client_postal_code: state.datosCliente.cp || null,
-      client_city: state.datosCliente.localidad || null,
-      is_minor: state.esMenor,
-      representative_full_name: state.esMenor ? state.datosRepresentante.nombreYApellidos : null,
-      representative_dni: state.esMenor ? state.datosRepresentante.dni : null,
-      representative_birth_date: state.esMenor ? state.datosRepresentante.fechaNacimiento : null,
-      representative_phone: state.esMenor ? state.datosRepresentante.telefono : null,
-      representative_address: state.esMenor ? state.datosRepresentante.domicilio : null,
-      representative_postal_code: state.esMenor ? state.datosRepresentante.cp : null,
-      representative_city: state.esMenor ? state.datosRepresentante.localidad : null,
-      representative_relationship: state.esMenor ? state.datosRepresentante.parentesco : null,
-      representative_accreditation: state.esMenor ? state.datosRepresentante.acreditaMediante : null,
-      health_flags: state.declaracionSaludSeleccionadas,
-      technique_data: {},
-      legal_acceptance: legalAcceptance,
-      status: 'pending_technique',
-      idempotency_key: idempotencyKey,
-    })
-    .select('id')
-    .single();
+	if (consentError || !consent) {
+		throw new Error(
+			`Error al guardar el consentimiento: ${consentError?.message || "desconocido"}`,
+		);
+	}
 
-  if (consentError || !consent) {
-    throw new Error(`Error al guardar el consentimiento: ${consentError?.message || 'desconocido'}`);
-  }
+	const clientSigner = getClientSigner(state, representation.represented);
+	const { error: signatureError } = await supabase
+		.from("consent_signatures")
+		.upsert(
+			{
+				consent_id: consent.id,
+				studio_id: studio.id,
+				artist_id: artist.id,
+				signer_type: clientSigner.signerType,
+				signer_name: clientSigner.signerName,
+				signature_hash: sha256Hex(clientSigner.signature),
+				metadata: { source: "public_wizard" },
+			},
+			{ onConflict: "consent_id,signer_type" },
+		);
 
-  const clientSigner = getClientSigner(state);
-  const { error: signatureError } = await supabase.from('consent_signatures').upsert(
-    {
-      consent_id: consent.id,
-      studio_id: artist.studio_id,
-      artist_id: artist.id,
-      signer_type: clientSigner.signerType,
-      signer_name: clientSigner.signerName,
-      signature_hash: sha256Hex(clientSigner.signature),
-      metadata: { source: 'public_wizard' },
-    },
-    { onConflict: 'consent_id,signer_type' }
-  );
+	if (signatureError) {
+		await supabase.from("consents").delete().eq("id", consent.id);
+		throw new Error(
+			`Error al registrar la firma del cliente: ${signatureError.message}`,
+		);
+	}
 
-  if (signatureError) {
-    await supabase.from('consents').delete().eq('id', consent.id);
-    throw new Error(`Error al registrar la firma del cliente: ${signatureError.message}`);
-  }
-
-  return {
-    consentId: consent.id,
-    status: 'pending_technique',
-    storagePath: '',
-    driveFileId: null,
-    driveViewLink: null,
-  };
+	return {
+		consentId: consent.id,
+		status: "pending_technique",
+		storagePath: "",
+		driveFileId: null,
+		driveViewLink: null,
+	};
 }
 
 export async function signConsentAsArtist(
