@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { ConsentTechniqueSchema } from '../domain/consents/consentPdfSchema.js';
+import { calculateAge } from '../domain/consents/age.js';
 
 // Utility to validate Spanish DNI/NIE
 export function validateDNI(dni: string): boolean {
@@ -38,7 +39,7 @@ export function validateDNI(dni: string): boolean {
 // Utility to validate Spanish phone numbers (allows spaces, dashes, dots, and standard +34 country code prefixes)
 export function validateTelefono(val: string | undefined): boolean {
   if (!val) return false;
-  const clean = val.replace(/[\s\-\(\)\+\.]/g, '');
+  const clean = val.replace(/[\s\-()+.]/g, '');
   let withoutPrefix = clean;
   if (clean.startsWith('0034')) {
     withoutPrefix = clean.slice(4);
@@ -51,14 +52,7 @@ export function validateTelefono(val: string | undefined): boolean {
 // Utility to calculate age from birthdate string (YYYY-MM-DD)
 export function getAge(birthDateString: string): number {
   if (!birthDateString) return 0;
-  const today = new Date();
-  const birthDate = new Date(birthDateString);
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
+  return calculateAge(birthDateString);
 }
 
 export const ClientSchema = z.object({
@@ -66,10 +60,12 @@ export const ClientSchema = z.object({
   dni: z.string().refine(validateDNI, 'DNI o NIE no válido'),
   fechaNacimiento: z.string().refine((val) => {
     if (!val) return false;
-    const date = new Date(val);
-    const minDate = new Date();
-    minDate.setFullYear(minDate.getFullYear() - 100);
-    return date < new Date() && date > minDate;
+        try {
+          const age = calculateAge(val);
+          return age >= 0 && age <= 100;
+        } catch {
+          return false;
+        }
   }, 'Fecha de nacimiento no válida'),
   domicilio: z.string().min(4, 'Introduce el domicilio completo'),
   cp: z.string().regex(/^\d{5}$/, 'Código postal de 5 dígitos'),
