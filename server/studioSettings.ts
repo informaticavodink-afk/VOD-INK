@@ -19,19 +19,18 @@ export type StudioSettingsPayload = {
 
 const DEMO_HEALTH_REGISTRATION = 'SAN/07/2024-C';
 const DEMO_HEALTH_DATE = '2024-06-15';
+const MADRID_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Europe/Madrid',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
 
 function todayInMadrid() {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Europe/Madrid',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-      .formatToParts(new Date())
-      .filter(({ type }) => type !== 'literal')
-      .map(({ type, value }) => [type, value])
-  );
+  const parts: Record<string, string> = {};
+  for (const { type, value } of MADRID_DATE_FORMATTER.formatToParts(new Date())) {
+    if (type !== 'literal') parts[type] = value;
+  }
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 

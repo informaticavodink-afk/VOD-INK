@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, Save, ShieldCheck } from 'lucide-react';
 import {
   EMPTY_STUDIO_FORM,
-  getStudioSettingsError,
+  fetchStudioSettings,
+  saveStudioSettings,
   studioToForm,
   todayInMadrid,
   type Studio,
@@ -27,12 +28,10 @@ export default function StudioSettingsManager() {
 
     async function load() {
       try {
-        const response = await fetch('/api/studio-settings');
-        if (!response.ok) throw new Error(await getStudioSettingsError(response));
-        const payload = await response.json();
+        const loadedStudio = await fetchStudioSettings();
         if (!active) return;
-        setStudio(payload.studio);
-        setForm(studioToForm(payload.studio));
+        setStudio(loadedStudio);
+        setForm(studioToForm(loadedStudio));
       } catch (loadError) {
         if (active) {
           setError(loadError instanceof Error ? loadError.message : 'No se pudo cargar el estudio.');
@@ -75,22 +74,12 @@ export default function StudioSettingsManager() {
     setSuccess(null);
 
     try {
-      const response = await fetch('/api/studio-settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          attest_health_data: confirmHealth,
-        }),
-      });
-      if (!response.ok) throw new Error(await getStudioSettingsError(response));
-
-      const payload = await response.json();
-      setStudio(payload.studio);
-      setForm(studioToForm(payload.studio));
+      const savedStudio = await saveStudioSettings(form, confirmHealth);
+      setStudio(savedStudio);
+      setForm(studioToForm(savedStudio));
       setConfirmHealth(false);
       setSuccess(
-        payload.studio.health_data_verified_at
+        savedStudio.health_data_verified_at
           ? 'Datos del estudio guardados y estado sanitario confirmado.'
           : 'Datos del estudio guardados. La confirmación sanitaria sigue pendiente.'
       );
