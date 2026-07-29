@@ -593,7 +593,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      update_studio_settings_as_manager: {
+        Args: {
+          p_actor_profile_id: string
+          p_address: string
+          p_attest_health_data?: boolean
+          p_city: string
+          p_health_authorization_date: string | null
+          p_health_registration_number: string | null
+          p_legal_name: string
+          p_phone: string
+          p_postal_code: string
+          p_studio_id: string
+          p_tax_id: string
+          p_trade_name: string
+        }
+        Returns: Database["public"]["Tables"]["studios"]["Row"]
+      }
     }
     Enums: {
       artist_status: "active" | "paused"
