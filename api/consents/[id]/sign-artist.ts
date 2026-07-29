@@ -7,8 +7,12 @@ interface SignArtistBody {
   driveAccessToken?: string;
 }
 
-function setCorsHeaders(res: ServerResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+function setCorsHeaders(res: ServerResponse, requestOrigin?: string) {
+  const allowedOrigin = process.env.PUBLIC_APP_ORIGIN?.trim();
+  if (allowedOrigin && requestOrigin === allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
@@ -36,7 +40,7 @@ function getIdFromUrl(url: string | undefined): string | null {
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  setCorsHeaders(res);
+  setCorsHeaders(res, req.headers.origin);
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -69,6 +73,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const result = await signConsentAsArtist(id, signature, userId, driveAccessToken);
     sendJson(res, 200, result);
   } catch (err) {
+    const finalizationError = (await import('../../../server/consents.js')).toFinalizationErrorEnvelope(err);
+    if (finalizationError) {
+      console.error(`[consents] ${finalizationError.body.error.code}`);
+      sendJson(res, finalizationError.status, finalizationError.body);
+      return;
+    }
     const message = err instanceof Error ? err.message : 'Error interno al firmar el consentimiento';
     console.error('Error en PATCH /api/consents/:id/sign-artist:', err);
     sendJson(res, message === 'No autenticado' ? 401 : message.includes('permisos') ? 403 : 400, {

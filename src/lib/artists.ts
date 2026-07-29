@@ -3,39 +3,35 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { createClient } from '@/utils/supabase/client';
-import type { Aplicador } from '../types';
+import type { Aplicador } from "../types";
 
-const STUDIO_SLUG = 'vod-ink';
+interface PublicArtistResponse {
+	id: string;
+	displayName: string;
+	qualification: string;
+	photoUrl: string | null;
+}
 
-export function mapSupabaseArtistToAplicador(artist: {
-  id: string;
-  full_name: string;
-  qualification: string;
-  dni: string;
-  photo_url: string | null;
-  drive_folder_id: string | null;
-}): Aplicador {
-  return {
-    id: artist.id,
-    nombreYApellidos: artist.full_name,
-    titulacion: artist.qualification,
-    dni: artist.dni,
-    fotoUrl: artist.photo_url || undefined,
-    carpetaDriveId: artist.drive_folder_id || '',
-  };
+function mapPublicArtistToAplicador(artist: PublicArtistResponse): Aplicador {
+	return {
+		id: artist.id,
+		nombreYApellidos: artist.displayName,
+		titulacion: artist.qualification,
+		fotoUrl: artist.photoUrl || undefined,
+	};
 }
 
 export async function fetchActiveArtists(): Promise<Aplicador[]> {
-  const supabase = createClient();
+	const response = await fetch("/api/public/artists", {
+		headers: { Accept: "application/json" },
+	});
 
-  const { data, error } = await supabase.rpc('get_active_artists', {
-    studio_slug: STUDIO_SLUG,
-  });
+	if (!response.ok) {
+		const body = await response.json();
+		const message = body?.error?.message ?? "Error al cargar tatuadores";
+		throw new Error(message);
+	}
 
-  if (error) {
-    throw new Error(`Error al cargar tatuadores: ${error.message}`);
-  }
-
-  return (data || []).map(mapSupabaseArtistToAplicador);
+	const body = await response.json();
+	return (body.artists ?? []).map(mapPublicArtistToAplicador);
 }

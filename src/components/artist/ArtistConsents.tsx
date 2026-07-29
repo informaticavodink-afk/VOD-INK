@@ -279,7 +279,7 @@ const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
                               <button
                                 type="button"
                                 onClick={() => onPreviewConsent(consent)}
-                                className="inline-flex items-center gap-2 rounded-xl border border-purple-100 bg-purple-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-purple-600 transition-all hover:bg-purple-100 cursor-pointer"
+                                className="inline-flex items-center gap-2 rounded-xl border border-purple-100 bg-purple-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-purple-600 transition-colors hover:bg-purple-100 cursor-pointer"
                                 title="Ver datos del cliente"
                                 aria-label="Ver datos del cliente"
                               >
@@ -290,8 +290,9 @@ const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
                               <button
                                 type="button"
                                 onClick={() => onInterveneConsent(consent)}
-                                className="inline-flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-600 transition-all hover:bg-red-100 cursor-pointer"
+                                className="inline-flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-600 transition-colors hover:bg-red-100 cursor-pointer"
                                 title="Firmar intervención y consentimiento"
+                                aria-label="Firmar intervención y consentimiento"
                               >
                                 <FileSignature className="w-3.5 h-3.5" />
                                 Firmar

@@ -59,10 +59,15 @@ create table public.artists (
   qualification text not null,
   photo_url text,
   drive_folder_id text,
+  login_email text,
   status public.artist_status not null default 'active',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create unique index if not exists artists_login_email_unique_idx
+  on public.artists (lower(login_email))
+  where login_email is not null;
 
 create table public.consents (
   id uuid primary key default gen_random_uuid(),

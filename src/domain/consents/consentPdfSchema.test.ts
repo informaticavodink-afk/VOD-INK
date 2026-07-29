@@ -16,7 +16,61 @@ function validDocument() {
   };
 }
 
+const representative = {
+  nombreYApellidos: 'Representante Sintetica', dni: '11111111H', fechaNacimiento: '1970-01-01',
+  domicilio: 'Calle Tutela 1', cp: '39001', localidad: 'Santander', telefono: '600000003',
+  parentesco: 'MADRE', acreditaMediante: 'LIBRO DE FAMILIA',
+};
+
+function v3Document(overrides: Record<string, unknown> = {}) {
+  return {
+    ...validDocument(),
+    templateVersion: 'consent-v3-representation',
+    tieneRepresentanteLegal: false,
+    ...overrides,
+  };
+}
+
 describe('ConsentPdfDataSchema', () => {
+  it.each([
+    ['minor represented', { esMenor: true, tieneRepresentanteLegal: true, representante: representative }],
+    ['adult unrepresented', { esMenor: false, tieneRepresentanteLegal: false, representante: null }],
+    ['adult represented', { esMenor: false, tieneRepresentanteLegal: true, representante: representative }],
+  ])('keeps minority and representation independent for %s', (_label, overrides) => {
+    const parsed = parseConsentPdfData(v3Document(overrides));
+    expect(parsed.templateVersion).toBe('consent-v3-representation');
+    expect(parsed.tieneRepresentanteLegal).toBe(overrides.tieneRepresentanteLegal);
+    expect(Boolean(parsed.representante)).toBe(overrides.tieneRepresentanteLegal);
+  });
+
+  it('rejects a v3 minor without legal representation', () => {
+    expect(() => parseConsentPdfData(v3Document({
+      esMenor: true,
+      tieneRepresentanteLegal: false,
+      representante: null,
+    }))).toThrow(/representación legal/i);
+  });
+
+  it.each([
+    ['representative without representation', { tieneRepresentanteLegal: false, representante: representative }],
+    ['representation without representative', { tieneRepresentanteLegal: true, representante: null }],
+  ])('requires representative iff representation is true: %s', (_label, overrides) => {
+    expect(() => parseConsentPdfData(v3Document(overrides))).toThrow(/representante/i);
+  });
+
+  it('rejects a partial persisted representative record', () => {
+    expect(() => parseConsentPdfData(v3Document({
+      tieneRepresentanteLegal: true,
+      representante: { ...representative, telefono: '' },
+    }))).toThrow(/Teléfono/i);
+  });
+
+  it('requires an explicit representation state for v3 documents', () => {
+    const document = v3Document() as Record<string, unknown>;
+    delete document.tieneRepresentanteLegal;
+    expect(() => parseConsentPdfData(document)).toThrow(/representación legal/i);
+  });
+
   it('acepta un documento completamente parametrizado', () => {
     expect(parseConsentPdfData(validDocument()).tecnica.presupuesto).toBe('275 EUR');
   });

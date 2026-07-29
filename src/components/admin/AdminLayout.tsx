@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import type { Database } from '@/src/types/supabase';
-import { FileText, LogOut, Users, Menu, X, ShieldCheck } from 'lucide-react';
+import { Building2, FileText, LogOut, Users, Menu, X, ShieldCheck } from 'lucide-react';
 import PrivacyToggle from '@/src/components/PrivacyToggle';
 import SensitiveText from '@/src/components/SensitiveText';
 import Branding from '@/src/components/Branding';
@@ -15,10 +15,12 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 
 interface AdminLayoutProps {
   profile: Profile;
-  activeTab: 'admins' | 'artists' | 'consents';
-  onTabChange: (tab: 'admins' | 'artists' | 'consents') => void;
+  activeTab: AdminTab;
+  onTabChange: (tab: AdminTab) => void;
   children: React.ReactNode;
 }
+
+export type AdminTab = 'studio' | 'admins' | 'artists' | 'consents';
 
 async function handleAdminLogout() {
   const supabase = createClient();
@@ -29,7 +31,7 @@ async function handleAdminLogout() {
 export default function AdminLayout({ profile, activeTab, onTabChange, children }: AdminLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navButtonClass = (tab: 'admins' | 'artists' | 'consents') =>
+  const navButtonClass = (tab: AdminTab) =>
     `w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-[0.12em] transition-all cursor-pointer ${
       activeTab === tab
         ? 'border-zinc-950 bg-zinc-950 text-white shadow-sm'
@@ -70,6 +72,17 @@ export default function AdminLayout({ profile, activeTab, onTabChange, children 
           <hr className="border-zinc-100 -mx-1" />
 
           <nav className="grid gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onTabChange('studio');
+                setIsMobileMenuOpen(false);
+              }}
+              className={navButtonClass('studio')}
+            >
+              <span>Datos del estudio</span>
+              <Building2 className="h-4 w-4" />
+            </button>
             <button
               type="button"
               onClick={() => {

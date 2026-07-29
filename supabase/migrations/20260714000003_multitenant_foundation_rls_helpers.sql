@@ -52,7 +52,7 @@ as $$
     where p.user_id = (select auth.uid())
       and m.organization_id = target_organization_id
       and m.status = 'active'
-      and m.role = any(roles)
+      and m.role::text = any(roles)
   );
 $$;
 

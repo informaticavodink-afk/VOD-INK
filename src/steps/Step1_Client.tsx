@@ -3,19 +3,27 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ClientSchema, RepresentanteSchema, getAge } from '../lib/schema';
-import { Cliente, RepresentanteLegal } from '../types';
+import { ClientSchema, RepresentanteSchema } from '../lib/schema';
+import { calculateAge, isMinorOnConsentDate } from '../domain/consents/age';
+import type { Cliente, RepresentanteLegal } from '../types';
 import { ShieldAlert, User, AlertTriangle, FileText, ToggleLeft, ToggleRight } from 'lucide-react';
-import DatePicker from '../components/DatePicker';
+    import DatePicker from '../components/DatePicker';
+
+const INITIAL_REPRESENTATIVE: RepresentanteLegal = {
+  nombreYApellidos: '', dni: '', fechaNacimiento: '', domicilio: '', cp: '', localidad: '',
+  telefono: '', parentesco: '', acreditaMediante: '',
+};
 
 interface Step1ClientProps {
   datosCliente: Cliente;
   datosRepresentante: RepresentanteLegal;
   esMenor: boolean;
-  onUpdate: (data: { datosCliente: Cliente; datosRepresentante: RepresentanteLegal; esMenor: boolean }) => void;
+  tieneRepresentanteLegal: boolean;
+  onUpdate: (data: { datosCliente: Cliente; datosRepresentante: RepresentanteLegal; esMenor: boolean; tieneRepresentanteLegal: boolean }) => void;
   triggerValidationRef: React.MutableRefHandle<(() => Promise<boolean>) | null>;
   saveStateRef: React.MutableRefHandle<(() => void) | null>;
 }
@@ -24,11 +32,12 @@ export default function Step1Client({
   datosCliente,
   datosRepresentante,
   esMenor: initialEsMenor,
+  tieneRepresentanteLegal: initialTieneRepresentanteLegal,
   onUpdate,
   triggerValidationRef,
   saveStateRef,
-}: Step1ClientProps) {
-  const [esMenor, setEsMenor] = useState(initialEsMenor);
+  }: Step1ClientProps) {
+
 
   // Client form
   const {
@@ -52,6 +61,7 @@ export default function Step1Client({
     getValues: getRepValues,
     watch: watchRep,
     setValue: setRepValue,
+    reset: resetRep,
   } = useForm<RepresentanteLegal>({
     resolver: zodResolver(RepresentanteSchema),
     defaultValues: datosRepresentante,
@@ -60,31 +70,38 @@ export default function Step1Client({
 
   const watchFechaNacimiento = watchClient('fechaNacimiento');
   const watchFechaNacimientoRep = watchRep('fechaNacimiento');
+  const [tieneRepresentanteLegal, setTieneRepresentanteLegal] = useState(initialTieneRepresentanteLegal);
+  const edad = (() => {
+    try { return watchFechaNacimiento ? calculateAge(watchFechaNacimiento) : 0; } catch { return 0; }
+  })();
+  const esMenor = (() => {
+    try { return watchFechaNacimiento ? isMinorOnConsentDate(watchFechaNacimiento) : false; } catch { return false; }
+  })();
+  const estaRepresentado = esMenor || tieneRepresentanteLegal;
 
-  // Watch client birthdate to auto-toggle minor status
   useEffect(() => {
-    if (watchFechaNacimiento) {
-      const age = getAge(watchFechaNacimiento);
-      if (age > 0 && age < 18) {
-        setEsMenor(true);
-      }
-    }
-  }, [watchFechaNacimiento]);
+    if (esMenor && !tieneRepresentanteLegal) setTieneRepresentanteLegal(true);
+  }, [esMenor, tieneRepresentanteLegal]);
+
+  useEffect(() => {
+    if (!estaRepresentado) resetRep({ ...INITIAL_REPRESENTATIVE });
+  }, [estaRepresentado, resetRep]);
 
   // Register saveStateRef to save values on demand (e.g. on navigation)
   useEffect(() => {
     saveStateRef.current = () => {
       onUpdate({
         datosCliente: getClientValues(),
-        datosRepresentante: getRepValues(),
+        datosRepresentante: estaRepresentado ? getRepValues() : INITIAL_REPRESENTATIVE,
         esMenor,
+        tieneRepresentanteLegal: estaRepresentado,
       });
     };
 
     return () => {
       saveStateRef.current = null;
     };
-  }, [getClientValues, getRepValues, esMenor, onUpdate, saveStateRef]);
+  }, [getClientValues, getRepValues, esMenor, estaRepresentado, onUpdate, saveStateRef]);
 
   // Expose validation function to parent and sync state
   useEffect(() => {
@@ -92,14 +109,15 @@ export default function Step1Client({
       const clientValid = await triggerClient();
       let repValid = true;
 
-      if (esMenor) {
+      if (estaRepresentado) {
         repValid = await triggerRep();
       }
 
       onUpdate({
         datosCliente: getClientValues(),
-        datosRepresentante: getRepValues(),
+        datosRepresentante: estaRepresentado ? getRepValues() : INITIAL_REPRESENTATIVE,
         esMenor,
+        tieneRepresentanteLegal: estaRepresentado,
       });
 
       return clientValid && repValid;
@@ -108,7 +126,7 @@ export default function Step1Client({
     return () => {
       triggerValidationRef.current = null;
     };
-  }, [triggerClient, triggerRep, esMenor, getClientValues, getRepValues, onUpdate, triggerValidationRef]);
+  }, [triggerClient, triggerRep, estaRepresentado, esMenor, getClientValues, getRepValues, onUpdate, triggerValidationRef]);
 
   return (
     <div className="flex-1 flex flex-col justify-between bg-zinc-50/50 select-none p-6 sm:p-8 overflow-y-auto">
@@ -233,14 +251,17 @@ export default function Step1Client({
               </div>
               <button
                 type="button"
+                disabled={esMenor}
+                aria-label="Representante legal"
                 onClick={() => {
-                  const age = getAge(watchFechaNacimiento);
-                  if (age > 0 && age < 18) return;
-                  setEsMenor(!esMenor);
+                  if (esMenor) return;
+                  const next = !tieneRepresentanteLegal;
+                  setTieneRepresentanteLegal(next);
+                  if (!next) resetRep({ ...INITIAL_REPRESENTATIVE });
                 }}
-                className="cursor-pointer text-zinc-700 hover:text-zinc-950 transition-colors"
+                className="cursor-pointer text-zinc-700 hover:text-zinc-950 transition-colors disabled:cursor-not-allowed"
               >
-                {esMenor ? (
+                {estaRepresentado ? (
                   <ToggleRight className="w-10 h-10 text-zinc-900" />
                 ) : (
                   <ToggleLeft className="w-10 h-10 text-zinc-300" />
@@ -309,7 +330,7 @@ export default function Step1Client({
         </div>
 
         {/* Representative legal section (Styled in a beautiful unified Bento container) */}
-        {esMenor && (
+        {estaRepresentado && (
           <div className="bento-card bg-zinc-900 text-white p-6 space-y-4 animate-fadeIn">
             <div className="flex items-start gap-2.5 border-b border-zinc-800 pb-3 mb-2">
               <ShieldAlert className="w-5 h-5 text-zinc-400 shrink-0 mt-0.5" />
@@ -323,11 +344,11 @@ export default function Step1Client({
               </div>
             </div>
 
-            {watchFechaNacimiento && getAge(watchFechaNacimiento) < 18 && (
+            {esMenor && (
               <div className="flex gap-2.5 p-3.5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-200 rounded-xl text-[11px] items-center leading-normal">
                 <AlertTriangle className="w-4 h-4 shrink-0 text-yellow-400" />
                 <span>
-                  El usuario es menor de edad ({getAge(watchFechaNacimiento)} años). Se requiere tutor legal.
+                  El usuario es menor de edad ({edad} años). Se requiere tutor legal.
                 </span>
               </div>
             )}

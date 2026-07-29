@@ -3,10 +3,9 @@ project:
   slug: vod-ink
   repository: https://github.com/informaticavodink-afk/VOD-INK.git
   description: |
-    SaaS multi-tenant para gestión de consentimientos informados en estudios
-    de tatuaje. Evolución desde una aplicación single-studio (Vod-INK) hacia
-    una plataforma multiempresa donde un usuario puede pertenecer a varias
-    organizaciones con roles owner, admin y artist.
+    Aplicación cliente VOD-INK para gestionar consentimientos informados de un
+    único estudio de tatuaje. El runtime actual es single-studio y no contiene
+    modelos de organizaciones, membresías ni tenancy SaaS.
 
 technology:
   frontend:
@@ -17,38 +16,78 @@ technology:
     - React Router 7
     - React Hook Form + Zod
   backend:
-    - Express 4
+    - Express 4 (local Node server)
+    - Vercel server functions
     - Node.js 24.x
-    - tsx (dev runtime)
+    - TypeScript 5.8 with tsx development runtime
   data:
-    - Supabase (Auth, PostgreSQL, Storage, Realtime)
+    - Supabase Auth
+    - Supabase PostgreSQL
+    - Supabase Storage
+    - Supabase Realtime
     - "@supabase/supabase-js 2.110"
     - "@supabase/ssr 0.12"
   testing:
+    runner: Vitest 3.2
+    environment: node
+    unit: npm test
+    coverage: npm run test:coverage
     typecheck: npm run lint
     build: npm run build
-    unit: none
-    e2e: none
+
+architecture:
+  tenancy: single-studio
+  consent_pdf:
+    generation: server-side
+    trigger: authenticated artist finalization
+    renderer: src/lib/pdf.ts
+    orchestration: server/consents.ts
+    persistence: >-
+      Supabase Storage bucket consent-pdfs with PostgreSQL file metadata
+    frontend_role: >-
+      Collect consent data and signatures; never generate the final PDF
 
 strict_tdd:
-  enabled: false
-  test_runner: npm run lint
-  note: Strict TDD is not active for this project. Verification relies on
-    tsc --noEmit and vite build.
+  enabled: true
+  test_runner: npm test
+  evidence_required:
+    RED: >-
+      Capture a focused failing Vitest test before implementation.
+    GREEN: >-
+      Capture the focused test passing after the minimal implementation.
+    TRIANGULATE: >-
+      Add or exercise adjacent and edge cases to guard the behavior.
+    REFACTOR: >-
+      Re-run the focused suite after cleanup without changing behavior.
+  verification_commands:
+    - npm test
+    - npm run lint
+    - npm run build
 
 phases:
-  default_mode: interactive
-  review_budget_lines: 400
-  chained_pr_strategy: single-pr-default
-  artifact_store: openspec
+  default_mode: auto
+  review_budget_lines: 300
+  chained_pr_strategy: auto-forecast
+  artifact_store: both
+  rules:
+    - >-
+      Use the active change as the only current delivery target; retain
+      historical change directories.
 
 constraints:
-  - The app is currently single-studio; migration must keep existing columns
-    functional during transition.
-  - Supabase is the source of truth for auth, data, storage and realtime.
-  - PDFs must be generated server-side in the future; currently generated in
-    frontend.
-  - RLS must be the real security boundary, not just UI hiding.
+  - >-
+    The production runtime is single-studio and has no organization or
+    membership models.
+  - >-
+    Historical SaaS and multitenant change artifacts are not descriptions of
+    the current runtime.
+  - Supabase Auth, PostgreSQL and Storage are the runtime sources of truth.
+  - >-
+    Final PDFs are generated only on the server during authenticated artist
+    finalization.
+  - >-
+    RLS and server-side authorization are security boundaries, not only UI
+    visibility controls.
   - Node.js runtime is pinned to 24.x.
 
 existing_planning_docs:
@@ -56,12 +95,9 @@ existing_planning_docs:
   - docs/plan-refresh-automatico-tablas.md
 
 active_change:
-  name: saas-multitenant-foundation
-  description: |
-    Fase 1 de la arquitectura multiempresa: agregar tablas de organizaciones,
-    membresías, invitaciones, sedes, branding y configuración; migrar
-    profiles.studio_id + profiles.role hacia una membresía organizacional
-    manteniendo temporalmente las columnas actuales para no romper la
-    aplicación.
+  name: repair-consent-studio-representative-flow
+  description: >-
+    Reparar el flujo de estudio y representante legal del consentimiento sin
+    alterar la finalización autenticada del artista.
   phases_completed: []
   next_phase: proposal

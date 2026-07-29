@@ -3,17 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import SignaturePad from '../components/SignaturePad';
 import { LEGAL_SECTIONS } from '../lib/legalTexts';
-import { Cliente, RepresentanteLegal } from '../types';
+import type { Cliente, RepresentanteLegal } from '../types';
 import { ShieldCheck, Check, CheckCircle2 } from 'lucide-react';
 import SensitiveText from '../components/SensitiveText';
 
 interface Step6SignatureClientProps {
   datosCliente: Cliente;
   datosRepresentante: RepresentanteLegal;
-  esMenor: boolean;
+  tieneRepresentanteLegal: boolean;
   firmaCliente: string;
   onUpdate: (firmaCliente: string) => void;
   triggerValidationRef: React.MutableRefHandle<(() => Promise<boolean>) | null>;
@@ -23,7 +24,7 @@ interface Step6SignatureClientProps {
 export default function Step6SignatureClient({
   datosCliente,
   datosRepresentante,
-  esMenor,
+  tieneRepresentanteLegal,
   firmaCliente,
   onUpdate,
   triggerValidationRef,
@@ -42,11 +43,12 @@ export default function Step6SignatureClient({
     };
   }, [signature, onUpdate, triggerValidationRef]);
 
-  const nombreFirmante = esMenor
+  const estaRepresentado = tieneRepresentanteLegal;
+  const nombreFirmante = estaRepresentado
     ? datosRepresentante.nombreYApellidos || 'TUTOR LEGAL NO DEFINIDO'
     : datosCliente.nombreYApellidos || 'CLIENTE NO DEFINIDO';
 
-  const dniFirmante = esMenor
+  const dniFirmante = estaRepresentado
     ? datosRepresentante.dni || 'DNI TUTOR NO DEFINIDO'
     : datosCliente.dni || 'DNI CLIENTE NO DEFINIDO';
 
@@ -80,7 +82,7 @@ export default function Step6SignatureClient({
             {LEGAL_SECTIONS.conformidad.texto}
           </p>
 
-          {esMenor && (
+          {estaRepresentado && (
             <div className="pt-3 border-t border-zinc-100 mt-3">
               <span className="font-sans font-bold text-zinc-900 text-[10px] uppercase tracking-wider block">
                 Autorización de Representación Integral
@@ -109,7 +111,7 @@ export default function Step6SignatureClient({
           <SignaturePad
             id="client-signature"
             placeholderText={
-              esMenor
+              estaRepresentado
                 ? 'Firma del Representante Legal (Padre/Madre/Tutor)'
                 : 'Firma de la Persona Usuaria (Cliente)'
             }

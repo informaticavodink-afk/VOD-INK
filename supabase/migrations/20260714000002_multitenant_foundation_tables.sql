@@ -1,5 +1,8 @@
 -- Organizations, memberships, invitations, locations, branding and settings.
 
+alter table public.profiles
+  add column if not exists platform_role public.platform_role not null default 'user';
+
 create table public.organizations (
   id uuid primary key default gen_random_uuid(),
   slug text not null unique,

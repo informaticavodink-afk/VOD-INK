@@ -8,10 +8,25 @@ import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, Sliders, Palette, Info, X, Check, Loader2, AlertCircle } from 'lucide-react';
 import { TechniqueSchema } from '../../lib/schema';
-import { Tecnica } from '../../types';
+import { toArtistActionError, type ArtistActionError } from '../../lib/artistFinalization';
+import type { Tecnica } from '../../types';
 import SensitiveText from '../SensitiveText';
 import DatePicker from '../DatePicker';
 import SignaturePad from '../SignaturePad';
+
+function techniqueDefaults(technique?: Tecnica): Tecnica {
+  return {
+    denominacionGenerica: technique?.denominacionGenerica || '',
+    localizacionAnatomica: technique?.localizacionAnatomica || '',
+    tintas: technique?.tintas?.length
+      ? technique.tintas
+      : [{ nombre: '', numRegistroAEMPS: '', lote: '', caducidad: '' }],
+    otrosMateriales: technique?.otrosMateriales || '',
+    duracion: technique?.duracion || '',
+    posibilidadesEliminacion: technique?.posibilidadesEliminacion || '',
+    presupuesto: technique?.presupuesto || '',
+  };
+}
 
 interface InterventionModalProps {
   isOpen: boolean;
@@ -20,7 +35,7 @@ interface InterventionModalProps {
   artist: any; // Perfil del artista firmante
   onSave: (techniqueData: Tecnica, signature: string) => Promise<void>;
   isSaving: boolean;
-  error?: string | null;
+  error?: ArtistActionError | string | null;
 }
 
 export default function InterventionModal({
@@ -56,17 +71,8 @@ export default function InterventionModal({
     formState: { errors },
   } = useForm<Tecnica>({
     resolver: zodResolver(TechniqueSchema),
-    defaultValues: {
-      denominacionGenerica: existingTechnique?.denominacionGenerica || '',
-      localizacionAnatomica: existingTechnique?.localizacionAnatomica || '',
-      tintas: existingTechnique?.tintas && existingTechnique.tintas.length > 0
-        ? existingTechnique.tintas
-        : [{ nombre: '', numRegistroAEMPS: '', lote: '', caducidad: '' }],
-      otrosMateriales: existingTechnique?.otrosMateriales || '',
-      duracion: existingTechnique?.duracion || '',
-      posibilidadesEliminacion: existingTechnique?.posibilidadesEliminacion || '',
-      presupuesto: existingTechnique?.presupuesto || '',
-    },
+    defaultValues: techniqueDefaults(existingTechnique),
+
     mode: 'onTouched',
   });
 
@@ -78,25 +84,21 @@ export default function InterventionModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    reset({
-      denominacionGenerica: existingTechnique?.denominacionGenerica || '',
-      localizacionAnatomica: existingTechnique?.localizacionAnatomica || '',
-      tintas: existingTechnique?.tintas?.length
-        ? existingTechnique.tintas
-        : [{ nombre: '', numRegistroAEMPS: '', lote: '', caducidad: '' }],
-      otrosMateriales: existingTechnique?.otrosMateriales || '',
-      duracion: existingTechnique?.duracion || '',
-      posibilidadesEliminacion: existingTechnique?.posibilidadesEliminacion || '',
-      presupuesto: existingTechnique?.presupuesto || '',
-    });
+    reset(techniqueDefaults(existingTechnique));
     setArtistSignature('');
     setSignatureError(null);
     setHealthAcknowledged(false);
     setHealthAckError(null);
     setValidationError(null);
-  }, [consent?.id, existingTechnique, isOpen, reset]);
+  }, [consent?.id, isOpen, reset]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    reset(techniqueDefaults(existingTechnique));
+  }, [existingTechnique, isOpen, reset]);
 
   const handleAddBlankInk = () => {
+
     append({
       nombre: '',
       numRegistroAEMPS: '',
@@ -119,6 +121,13 @@ export default function InterventionModal({
     }
     setSignatureError(null);
     await onSave(data, artistSignature);
+  };
+
+  const normalizedError = error ? toArtistActionError(error) : null;
+  const retryFinalization = () => {
+    void handleSubmit(onSubmitForm, () => {
+      setValidationError('Revisa los campos marcados antes de confirmar la intervención.');
+    })();
   };
 
   if (!isOpen || !consent) return null;
@@ -479,11 +488,21 @@ export default function InterventionModal({
             </div>
           )}
 
-          {error && (
-            <div role="alert" className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl text-left">
-              {error}
-            </div>
-          )}
+              {normalizedError && (
+                <div role="alert" className="bg-red-50 border border-red-100 text-red-700 text-xs p-3 rounded-xl text-left space-y-3">
+                  <p>{normalizedError.message}</p>
+                  {normalizedError.action === 'retry-finalization' && (
+                    <button
+                      type="button"
+                      onClick={retryFinalization}
+                      disabled={isSaving}
+                      className="rounded-xl border border-red-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                    >
+                      Reintentar finalización
+                    </button>
+                  )}
+                </div>
+              )}
 
           {/* Action Buttons */}
           <div className="pt-4 border-t border-zinc-100 flex gap-3 shrink-0">

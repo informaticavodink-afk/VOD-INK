@@ -78,6 +78,7 @@ describe('Vercel serverless ESM resolution', () => {
       writeFileSync(path.join(outputRoot, 'package.json'), JSON.stringify({ type: 'module' }));
 
       const entries = [
+        'api/studio-settings.js',
         'api/consents/[id]/technique.js',
         'api/consents/[id]/sign-artist.js',
         'server/consents.js',
@@ -93,5 +94,5 @@ describe('Vercel serverless ESM resolution', () => {
     } finally {
       rmSync(outputRoot, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 });

@@ -1,5 +1,9 @@
 import type { Database } from '../src/types/supabase.js';
-import { parseConsentPdfData, type ConsentPdfData } from '../src/domain/consents/consentPdfSchema.js';
+import {
+  CONSENT_PDF_TEMPLATE_VERSION,
+  parseConsentPdfData,
+  type ConsentPdfData,
+} from '../src/domain/consents/consentPdfSchema.js';
 
 type ConsentRow = Database['public']['Tables']['consents']['Row'];
 type ArtistRow = Database['public']['Tables']['artists']['Row'];
@@ -17,15 +21,20 @@ function required(value: string | null | undefined) {
   return value ?? '';
 }
 
-export function buildConsentPdfData({
-  consent,
-  artist,
-  studio,
-  artistSignature,
-  generatedAt = new Date(),
-}: BuildConsentPdfDataInput): ConsentPdfData {
-  const legalAcceptance = (consent.legal_acceptance ?? {}) as Record<string, unknown>;
-  const representative = consent.is_minor ? {
+const representativeColumns = [
+  'representative_full_name', 'representative_dni', 'representative_birth_date',
+  'representative_address', 'representative_postal_code', 'representative_city',
+  'representative_phone', 'representative_relationship', 'representative_accreditation',
+] as const;
+
+function buildRepresentative(consent: ConsentRow) {
+  const represented = consent.has_legal_representative === true;
+  const hasPersistedData = representativeColumns.some((column) => consent[column] != null);
+  if (!represented) {
+    if (hasPersistedData) throw new Error('La representación persistida está incompleta o no coincide con su estado');
+    return null;
+  }
+  return {
     nombreYApellidos: required(consent.representative_full_name),
     dni: required(consent.representative_dni),
     fechaNacimiento: required(consent.representative_birth_date),
@@ -35,10 +44,22 @@ export function buildConsentPdfData({
     telefono: required(consent.representative_phone),
     parentesco: required(consent.representative_relationship),
     acreditaMediante: required(consent.representative_accreditation),
-  } : null;
+  };
+}
+
+export function buildConsentPdfData({
+  consent,
+  artist,
+  studio,
+  artistSignature,
+  generatedAt = new Date(),
+}: BuildConsentPdfDataInput): ConsentPdfData {
+  const legalAcceptance = (consent.legal_acceptance ?? {}) as Record<string, unknown>;
+  const represented = consent.has_legal_representative === true;
+  const representative = buildRepresentative(consent);
 
   return parseConsentPdfData({
-    templateVersion: 'consent-v2',
+    templateVersion: CONSENT_PDF_TEMPLATE_VERSION,
     generatedAt: generatedAt.toISOString(),
     establecimiento: {
       nombreRazonSocial: studio.legal_name,
@@ -67,6 +88,7 @@ export function buildConsentPdfData({
       telefono: required(consent.client_phone),
     },
     esMenor: consent.is_minor,
+    tieneRepresentanteLegal: represented,
     representante: representative,
     tecnica: consent.technique_data,
     salud: Array.isArray(consent.health_flags) ? consent.health_flags : [],

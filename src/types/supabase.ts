@@ -142,9 +142,11 @@ export type Database = {
           bucket_id: string
           consent_id: string
           created_at: string
+          document_kind: string
+          drive_copy_claimed_at: string | null
+          drive_copy_completed_at: string | null
           drive_file_id: string | null
           drive_view_link: string | null
-          document_kind: string
           file_name: string
           id: string
           mime_type: string
@@ -158,9 +160,11 @@ export type Database = {
           bucket_id?: string
           consent_id: string
           created_at?: string
+          document_kind?: string
+          drive_copy_claimed_at?: string | null
+          drive_copy_completed_at?: string | null
           drive_file_id?: string | null
           drive_view_link?: string | null
-          document_kind?: string
           file_name: string
           id?: string
           mime_type?: string
@@ -174,9 +178,11 @@ export type Database = {
           bucket_id?: string
           consent_id?: string
           created_at?: string
+          document_kind?: string
+          drive_copy_claimed_at?: string | null
+          drive_copy_completed_at?: string | null
           drive_file_id?: string | null
           drive_view_link?: string | null
-          document_kind?: string
           file_name?: string
           id?: string
           mime_type?: string
@@ -288,8 +294,10 @@ export type Database = {
           document_snapshot: Json | null
           document_template_version: string | null
           final_file_id: string | null
+          finalization_content_sha256: string | null
           finalization_started_at: string | null
           finalized_at: string | null
+          has_legal_representative: boolean
           health_flags: Json
           id: string
           idempotency_key: string
@@ -324,8 +332,10 @@ export type Database = {
           document_snapshot?: Json | null
           document_template_version?: string | null
           final_file_id?: string | null
+          finalization_content_sha256?: string | null
           finalization_started_at?: string | null
           finalized_at?: string | null
+          has_legal_representative: boolean
           health_flags?: Json
           id?: string
           idempotency_key: string
@@ -360,8 +370,10 @@ export type Database = {
           document_snapshot?: Json | null
           document_template_version?: string | null
           final_file_id?: string | null
+          finalization_content_sha256?: string | null
           finalization_started_at?: string | null
           finalized_at?: string | null
+          has_legal_representative?: boolean
           health_flags?: Json
           id?: string
           idempotency_key?: string
@@ -384,17 +396,24 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "consents_final_file_id_fkey"
-            columns: ["final_file_id"]
-            isOneToOne: false
-            referencedRelation: "consent_files"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "consents_artist_id_fkey"
             columns: ["artist_id"]
             isOneToOne: false
             referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consents_artist_studio_fkey"
+            columns: ["artist_id", "studio_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id", "studio_id"]
+          },
+          {
+            foreignKeyName: "consents_final_file_id_fkey"
+            columns: ["final_file_id"]
+            isOneToOne: false
+            referencedRelation: "consent_files"
             referencedColumns: ["id"]
           },
           {
@@ -524,6 +543,7 @@ export type Database = {
           city: string | null
           created_at: string
           health_authorization_date: string | null
+          health_data_verified_at: string | null
           health_registration_number: string | null
           id: string
           legal_name: string
@@ -539,6 +559,7 @@ export type Database = {
           city?: string | null
           created_at?: string
           health_authorization_date?: string | null
+          health_data_verified_at?: string | null
           health_registration_number?: string | null
           id?: string
           legal_name: string
@@ -554,6 +575,7 @@ export type Database = {
           city?: string | null
           created_at?: string
           health_authorization_date?: string | null
+          health_data_verified_at?: string | null
           health_registration_number?: string | null
           id?: string
           legal_name?: string
@@ -571,17 +593,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_active_artists: {
-        Args: { studio_slug: string }
-        Returns: {
-          dni: string
-          drive_folder_id: string
-          full_name: string
-          id: string
-          photo_url: string
-          qualification: string
-          studio_id: string
-        }[]
+      update_studio_settings_as_manager: {
+        Args: {
+          p_actor_profile_id: string
+          p_address: string
+          p_attest_health_data?: boolean
+          p_city: string
+          p_health_authorization_date: string | null
+          p_health_registration_number: string | null
+          p_legal_name: string
+          p_phone: string
+          p_postal_code: string
+          p_studio_id: string
+          p_tax_id: string
+          p_trade_name: string
+        }
+        Returns: Database["public"]["Tables"]["studios"]["Row"]
       }
     }
     Enums: {

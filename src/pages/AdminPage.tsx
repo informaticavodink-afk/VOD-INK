@@ -13,6 +13,8 @@ import AdminLayout from '@/src/components/admin/AdminLayout';
 import ArtistsManager from '@/src/components/admin/ArtistsManager';
 import AdminsManager from '@/src/components/admin/AdminsManager';
 import ConsentsManager from '@/src/components/admin/ConsentsManager';
+import StudioSettingsManager from '@/src/components/admin/StudioSettingsManager';
+import type { AdminTab } from '@/src/components/admin/AdminLayout';
 import { Loader2, LogOut } from 'lucide-react';
 
 async function handleLogout() {
@@ -24,7 +26,7 @@ async function handleLogout() {
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading } = useProfile(user?.id);
-  const [activeTab, setActiveTab] = useState<'admins' | 'artists' | 'consents'>('artists');
+  const [activeTab, setActiveTab] = useState<AdminTab>('studio');
 
   if (authLoading || profileLoading) {
     return (
@@ -65,6 +67,7 @@ export default function AdminPage() {
 
   return (
     <AdminLayout profile={profile} activeTab={activeTab} onTabChange={setActiveTab}>
+      {activeTab === 'studio' && <StudioSettingsManager />}
       {activeTab === 'admins' && <AdminsManager studioId={profile.studio_id} />}
       {activeTab === 'artists' && <ArtistsManager studioId={profile.studio_id} />}
       {activeTab === 'consents' && <ConsentsManager studioId={profile.studio_id} />}

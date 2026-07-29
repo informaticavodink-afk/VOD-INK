@@ -6,7 +6,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
-import { Aplicador, Cliente, RepresentanteLegal, Submission, Tecnica, WizardState } from '../types';
+import type { Aplicador, Cliente, RepresentanteLegal, Submission, Tecnica, WizardState } from '../types';
 import BrandMark from '../components/BrandMark';
 import Header from '../components/Header';
 import StepFooter from '../components/StepFooter';
@@ -62,6 +62,7 @@ export default function WizardPage() {
   const [artistaSeleccionado, setArtistaSeleccionado] = useState<Aplicador | null>(null);
   const [datosCliente, setDatosCliente] = useState<Cliente>(INITIAL_CLIENT);
   const [esMenor, setEsMenor] = useState<boolean>(false);
+  const [tieneRepresentanteLegal, setTieneRepresentanteLegal] = useState<boolean>(false);
   const [datosRepresentante, setDatosRepresentante] = useState<RepresentanteLegal>(INITIAL_REPRESENTATIVE);
   const [datosTecnica, setDatosTecnica] = useState<Tecnica>(INITIAL_TECHNIQUE);
   const [declaracionLeido, setDeclaracionLeido] = useState<boolean>(false);
@@ -103,6 +104,7 @@ export default function WizardPage() {
     artistaSeleccionado,
     datosCliente,
     esMenor,
+    tieneRepresentanteLegal,
     datosRepresentante,
     datosTecnica,
     declaracionLeido,
@@ -171,6 +173,7 @@ export default function WizardPage() {
     setArtistaSeleccionado(null);
     setDatosCliente(INITIAL_CLIENT);
     setEsMenor(false);
+    setTieneRepresentanteLegal(false);
     setDatosRepresentante(INITIAL_REPRESENTATIVE);
     setDatosTecnica(INITIAL_TECHNIQUE);
     setDeclaracionLeido(false);
@@ -378,10 +381,12 @@ export default function WizardPage() {
                   datosCliente={datosCliente}
                   datosRepresentante={datosRepresentante}
                   esMenor={esMenor}
+                  tieneRepresentanteLegal={tieneRepresentanteLegal}
                   onUpdate={(data) => {
                     setDatosCliente(data.datosCliente);
                     setDatosRepresentante(data.datosRepresentante);
                     setEsMenor(data.esMenor);
+                    setTieneRepresentanteLegal(data.tieneRepresentanteLegal);
                   }}
                   triggerValidationRef={triggerValidationRef}
                   saveStateRef={saveStateRef}
@@ -412,7 +417,7 @@ export default function WizardPage() {
                 <Step6SignatureClient
                   datosCliente={datosCliente}
                   datosRepresentante={datosRepresentante}
-                  esMenor={esMenor}
+                  tieneRepresentanteLegal={tieneRepresentanteLegal}
                   firmaCliente={firmaCliente}
                   onUpdate={setFirmaCliente}
                   triggerValidationRef={triggerValidationRef}
