@@ -92,7 +92,23 @@ describe('generateConsentPDF', () => {
     expect(result.blob.type).toBe('application/pdf');
     expect(result.fileName).toMatch(/^Consentimiento_PARAMETRIZADA_/);
 
-    for (const expected of ['ESTUDIO PARAMETRIZADO SL', 'MARCA PARAMETRIZADA', 'ARTISTA PARAMETRIZADA', 'CLIENTE PARAMETRIZADA', 'TECNICA UNICA', 'ZONA UNICA', 'TINTA UNICA', 'LOTE-UNICO', 'PRECIO UNICO 275', 'LUGAR UNICO']) {
+    for (const expected of [
+      'ESTUDIO PARAMETRIZADO SL',
+      'MARCA PARAMETRIZADA',
+      'CALLE ESTUDIO 91',
+      'CIUDAD ESTUDIO',
+      '39091',
+      'B87654321',
+      '942919191',
+      'ARTISTA PARAMETRIZADA',
+      'CLIENTE PARAMETRIZADA',
+      'TECNICA UNICA',
+      'ZONA UNICA',
+      'TINTA UNICA',
+      'LOTE-UNICO',
+      'PRECIO UNICO 275',
+      'LUGAR UNICO',
+    ]) {
       expect(text).toContain(expected);
     }
     expect(text).not.toMatch(/aquí iría|No asignado|Tatuador Ejemplo|\[CIF\]/i);

@@ -21,7 +21,17 @@ const studio = { id: consent.studio_id, legal_name: 'ESTUDIO BD SL', trade_name:
 describe('buildConsentPdfData', () => {
   it('compone cada sección desde las filas persistidas', () => {
     const document = buildConsentPdfData({ consent, artist, studio, artistSignature: signature, generatedAt: new Date('2026-07-24T12:00:00Z') });
-    expect(document.establecimiento.nombreRazonSocial).toBe('ESTUDIO BD SL');
+    expect(document.establecimiento).toEqual({
+      nombreRazonSocial: 'ESTUDIO BD SL',
+      nombreComercial: 'MARCA BD',
+      domicilio: 'CALLE ESTUDIO BD',
+      localidad: 'SANTANDER',
+      cp: '39002',
+      cif: 'B12345678',
+      telefono: '942000001',
+      numRegistroSanidad: 'SAN-BD',
+      fechaAutorizacion: '2024-01-01',
+    });
     expect(document.aplicador.nombreYApellidos).toBe('ARTISTA BD');
     expect(document.cliente.nombreYApellidos).toBe('CLIENTE BD');
     expect(document.tecnica.tintas[0].lote).toBe('LOTE-BD');
