@@ -26,6 +26,7 @@ import {
 } from './consents';
 import type { WizardState } from '../src/types';
 import { RepresentanteSchema } from '../src/lib/schema';
+import { PublicConsentError } from './publicConsentErrors';
 
 const mockedCreateServiceClient = vi.mocked(createServiceClient);
 const mockedResolvePublicStudio = vi.mocked(resolvePublicStudio);
@@ -84,11 +85,16 @@ function invalidWizardState(): WizardState {
         parentesco: 'Tutoría', acreditaMediante: 'Documento sintético',
       };
 
-      it('rejects a browser minority claim that disagrees with server age derivation', () => {
-        expect(() => deriveConsentRepresentation({
-          fechaNacimiento: '2008-06-15', esMenor: false, tieneRepresentanteLegal: true,
-        }, '2026-06-14')).toThrow(/edad/i);
-      });
+          it.each([
+            { fechaNacimiento: '2008-06-15', esMenor: false, tieneRepresentanteLegal: true },
+            { fechaNacimiento: '2010-06-15', esMenor: true, tieneRepresentanteLegal: false },
+          ])('classifies canonical representation failures without embedding $fechaNacimiento', async (input) => {
+            const rejection = Promise.resolve().then(() => deriveConsentRepresentation(input, '2026-06-14'));
+
+            await expect(rejection).rejects.toBeInstanceOf(PublicConsentError);
+            await expect(rejection).rejects.toMatchObject({ code: 'REPRESENTATION_INVALID', stage: 'representation' });
+            await expect(rejection).rejects.not.toThrow(input.fechaNacimiento);
+          });
 
       it('requires representation for minors and allows represented adults', () => {
         expect(() => deriveConsentRepresentation({
@@ -100,8 +106,8 @@ function invalidWizardState(): WizardState {
       });
 
       it('rejects represented persistence without a complete representative', () => {
-        expect(() => buildRepresentativePersistence(true)).toThrow(/complet/i);
-        expect(() => buildRepresentativePersistence(true, { ...representative, telefono: '' })).toThrow();
+        expect(() => buildRepresentativePersistence(true)).toThrow(PublicConsentError);
+        expect(() => buildRepresentativePersistence(true, { ...representative, telefono: '' })).toThrow(PublicConsentError);
         expect(RepresentanteSchema.safeParse({ ...representative, telefono: '' }).success).toBe(false);
       });
 

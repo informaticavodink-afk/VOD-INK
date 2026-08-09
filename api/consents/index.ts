@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "http";
 import { generateAndSubmitConsent } from "../../server/consents.js";
-import { toPublicBoundaryErrorEnvelope } from "../../server/publicStudio.js";
+import { classifyPublicConsentError, PublicConsentError } from "../../server/publicConsentErrors.js";
 import { parseBody } from "../_lib/parseBody.js";
 import type { WizardState } from "../../src/types.js";
 
@@ -39,34 +40,15 @@ export default async function handler(
 		return;
 	}
 
+	const correlationId = randomUUID();
 	try {
-		const { state, idempotencyKey, driveAccessToken } =
-			await parseBody<ConsentsPostBody>(req);
-
-		if (!state || !idempotencyKey) {
-			sendJson(res, 400, { error: "Faltan state o idempotencyKey" });
-			return;
-		}
-
-		const result = await generateAndSubmitConsent(
-			state,
-			idempotencyKey,
-			driveAccessToken,
-		);
+		const { state, idempotencyKey, driveAccessToken } = await parseBody<ConsentsPostBody>(req);
+		if (!state || !idempotencyKey) throw new PublicConsentError("SUBMISSION_INVALID", "request");
+		const result = await generateAndSubmitConsent(state, idempotencyKey, driveAccessToken);
 		sendJson(res, 200, result);
 	} catch (err) {
-		const boundaryError = toPublicBoundaryErrorEnvelope(err);
-		if (boundaryError) {
-			console.error(`[consents] ${boundaryError.body.error.code}`);
-			sendJson(res, boundaryError.status, boundaryError.body);
-			return;
-		}
-		console.error("Error en /api/consents:", err);
-		sendJson(res, 500, {
-			error:
-				err instanceof Error
-					? err.message
-					: "Error interno al procesar el consentimiento",
-		});
+		const failure = classifyPublicConsentError(err, correlationId);
+		console.error("[public-consent]", failure.log);
+		sendJson(res, failure.status, failure.body);
 	}
 }

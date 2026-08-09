@@ -15,7 +15,7 @@ import Step1Client from '../steps/Step1_Client';
 import Step3Legal from '../steps/Step3_Legal';
 import Step4Contraindications from '../steps/Step4_Contraindications';
 import Step6SignatureClient from '../steps/Step6_SignatureClient';
-import { clearIdempotencyKey, getOrCreateIdempotencyKey, submitConsentToApi } from '../lib/submissions';
+import { clearIdempotencyKey, getOrCreateIdempotencyKey, submitConsentToApi, SubmissionError } from '../lib/submissions';
 
 // Los pasos técnicos, de presupuesto y de firma del artista se conservan fuera
 // del flujo público porque se utilizarán desde el panel de administración.
@@ -77,6 +77,8 @@ export default function WizardPage() {
   const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [showPopupSuccess, setShowPopupSuccess] = useState<boolean>(false);
+  const [submissionError, setSubmissionError] = useState<SubmissionError | null>(null);
+  const pendingSubmissionRef = useRef(false);
 
   const triggerValidationRef = useRef<(() => Promise<boolean>) | null>(null);
   const saveStateRef = useRef<(() => void) | null>(null);
@@ -118,6 +120,10 @@ export default function WizardPage() {
   };
 
   const handleSubmitFinal = async () => {
+    if (isSubmitting) return;
+    if (pendingSubmissionRef.current) return;
+    pendingSubmissionRef.current = true;
+    setSubmissionError(null);
     setIsSubmitting(true);
     setProgressMessage('Enviando consentimiento de forma segura...');
 
@@ -152,9 +158,11 @@ export default function WizardPage() {
 
 
     } catch (error) {
-      console.error('Fatal error submitting consent:', error);
-      alert('Ocurrió un error crítico durante el envío del consentimiento. Por favor, reintente.');
+      setSubmissionError(error instanceof SubmissionError ? error : new SubmissionError(
+        'No se pudo completar el envío. Vuelve a intentarlo.', 'SUBMISSION_FAILED', true, 'no-disponible',
+      ));
     } finally {
+      pendingSubmissionRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -429,6 +437,19 @@ export default function WizardPage() {
         </AnimatePresence>
       </main>
 
+      {submissionError && (
+        <div role="alert" className="mx-4 mb-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-950">
+          <p className="font-semibold">{submissionError.message}</p>
+          <p className="mt-1 text-xs">Referencia: {submissionError.correlationId}</p>
+          {submissionError.retryable && (
+            <button type="button" disabled={isSubmitting} onClick={handleSubmitFinal}
+              className="mt-3 min-h-[44px] min-w-[44px] rounded-lg bg-red-950 px-4 font-semibold text-white disabled:opacity-50">
+              Reintentar envío
+            </button>
+          )}
+        </div>
+      )}
+
       {paso >= 0 && paso <= TOTAL_STEPS && (
         <StepFooter
           pasoActual={paso}
@@ -468,7 +489,7 @@ export default function WizardPage() {
               </h2>
               <div className="flex items-center justify-center gap-2 text-emerald-800 font-sans text-xs font-semibold bg-emerald-50 p-3.5 border border-emerald-200 rounded-xl shadow-sm">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Firma del cliente registrada y autenticada correctamente</span>
+                <span>Firma lista para enviar</span>
               </div>
             </div>
 
@@ -482,6 +503,7 @@ export default function WizardPage() {
               </button>
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={async () => {
                   setShowPopupSuccess(false);
                   await handleSubmitFinal();

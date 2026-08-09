@@ -95,9 +95,14 @@ existing_planning_docs:
   - docs/plan-refresh-automatico-tablas.md
 
 active_change:
-  name: repair-consent-studio-representative-flow
+  name: stabilize-consent-submission-and-signature
   description: >-
-    Reparar el flujo de estudio y representante legal del consentimiento sin
-    alterar la finalización autenticada del artista.
-  phases_completed: []
-  next_phase: proposal
+    Estabilizar el envío público de consentimientos con representante legal,
+    exponer errores seguros y corregir la firma móvil sin ampliar el alcance.
+  phases_completed:
+    - explore
+    - proposal
+    - spec
+    - design
+    - tasks
+  next_phase: apply

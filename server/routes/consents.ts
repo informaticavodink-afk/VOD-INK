@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { randomUUID } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import {
 	cancelConsentAsArtist,
@@ -11,7 +12,7 @@ import {
 	signConsentAsArtist,
 	toFinalizationErrorEnvelope,
 } from "../consents.js";
-import { toPublicBoundaryErrorEnvelope } from "../publicStudio.js";
+import { classifyPublicConsentError, PublicConsentError } from "../publicConsentErrors.js";
 
 const router = Router();
 
@@ -30,32 +31,16 @@ function getStatus(error: unknown) {
 }
 
 export async function createConsent(req: Request, res: Response) {
-	const { state, idempotencyKey, driveAccessToken } = req.body;
-
-	if (!state || !idempotencyKey) {
-		return res.status(400).json({ error: "Faltan state o idempotencyKey" });
-	}
-
+	const correlationId = randomUUID();
 	try {
-		const result = await generateAndSubmitConsent(
-			state,
-			idempotencyKey,
-			driveAccessToken,
-		);
+		const { state, idempotencyKey, driveAccessToken } = req.body ?? {};
+		if (!state || !idempotencyKey) throw new PublicConsentError("SUBMISSION_INVALID", "request");
+		const result = await generateAndSubmitConsent(state, idempotencyKey, driveAccessToken);
 		return res.status(200).json(result);
 	} catch (err) {
-		const boundaryError = toPublicBoundaryErrorEnvelope(err);
-		if (boundaryError) {
-			console.error(`[consents] ${boundaryError.body.error.code}`);
-			return res.status(boundaryError.status).json(boundaryError.body);
-		}
-		console.error("Error en /api/consents:", err);
-		return res.status(500).json({
-			error:
-				err instanceof Error
-					? err.message
-					: "Error interno al procesar el consentimiento",
-		});
+		const failure = classifyPublicConsentError(err, correlationId);
+		console.error("[public-consent]", failure.log);
+		return res.status(failure.status).json(failure.body);
 	}
 }
 

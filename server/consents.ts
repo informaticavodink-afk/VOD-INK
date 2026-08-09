@@ -16,6 +16,7 @@ import type { WizardState } from "../src/types.js";
 import path from "path";
 import fs from "fs";
 import { createHash } from "crypto";
+import { PublicConsentError } from "./publicConsentErrors.js";
 
 const LOCAL_PDFS_DIR = path.join(process.cwd(), "data", "pdfs");
 
@@ -107,10 +108,10 @@ export interface SubmitConsentResult {
 	const birthDate = "datosCliente" in state ? state.datosCliente.fechaNacimiento : state.fechaNacimiento;
 	const isMinor = isMinorOnConsentDate(birthDate, consentDate);
 	if (typeof state.esMenor === "boolean" && state.esMenor !== isMinor) {
-		throw new Error("La clasificación de edad del navegador no coincide con la edad derivada");
+		throw new PublicConsentError("REPRESENTATION_INVALID", "representation");
 	}
 	const represented = state.tieneRepresentanteLegal === true;
-	if (isMinor && !represented) throw new Error("Los menores requieren representación legal");
+	if (isMinor && !represented) throw new PublicConsentError("REPRESENTATION_INVALID", "representation");
 	return { isMinor, represented };
 }
 
@@ -120,8 +121,10 @@ export function buildRepresentativePersistence(represented: boolean, representat
 		representative_phone: null, representative_address: null, representative_postal_code: null,
 		representative_city: null, representative_relationship: null, representative_accreditation: null,
 	};
-	if (!representative) throw new Error("La representación requiere datos completos");
-	const validatedRepresentative = RepresentanteSchema.parse(representative);
+	if (!representative) throw new PublicConsentError("REPRESENTATION_INVALID", "representation");
+	const parsed = RepresentanteSchema.safeParse(representative);
+	if (!parsed.success) throw new PublicConsentError("REPRESENTATION_INVALID", "representation");
+	const validatedRepresentative = parsed.data;
 	return {
 		representative_full_name: validatedRepresentative.nombreYApellidos, representative_dni: validatedRepresentative.dni,
 		representative_birth_date: validatedRepresentative.fechaNacimiento, representative_phone: validatedRepresentative.telefono,
@@ -165,21 +168,18 @@ export async function generateAndSubmitConsent(
 	idempotencyKey: string,
 	_driveAccessToken?: string,
 ): Promise<SubmitConsentResult> {
-	ClientSchema.parse(state.datosCliente);
+	const client = ClientSchema.safeParse(state?.datosCliente);
+	if (!client.success) throw new PublicConsentError("SUBMISSION_INVALID", "validation");
 	const representation = deriveConsentRepresentation(state);
-	if (representation.represented) RepresentanteSchema.parse(state.datosRepresentante);
-	if (!state.declaracionLeido || !state.declaracionContraindicaciones) {
-		throw new Error(
-			"Las declaraciones legales obligatorias no están aceptadas",
-		);
-	}
-	if (!/^data:image\/png;base64,iVBORw0KGgo/.test(state.firmaCliente)) {
-		throw new Error("La firma del cliente no es una imagen PNG válida");
-	}
+	if (representation.represented && !RepresentanteSchema.safeParse(state.datosRepresentante).success)
+		throw new PublicConsentError("REPRESENTATION_INVALID", "representation");
+	if (!state.declaracionLeido || !state.declaracionContraindicaciones ||
+		!/^data:image\/png;base64,iVBORw0KGgo/.test(state.firmaCliente))
+		throw new PublicConsentError("SUBMISSION_INVALID", "validation");
 
 	const supabase = createServiceClient();
 	const artistId = state.artistaSeleccionado?.id;
-	if (!artistId) throw new Error("No se ha seleccionado un tatuador");
+	if (!artistId) throw new PublicConsentError("SUBMISSION_INVALID", "validation");
 
 	const studio = await resolvePublicStudio(supabase);
 	const artist = await resolveAvailablePublicArtist(
@@ -188,13 +188,14 @@ export async function generateAndSubmitConsent(
 		artistId,
 	);
 
-	const { data: existing } = await supabase
+	const { data: existing, error: existingError } = await supabase
 		.from("consents")
 		.select("id, status, final_file_id")
 		.eq("studio_id", studio.id)
 		.eq("idempotency_key", idempotencyKey)
 		.maybeSingle();
 
+	if (existingError) throw new PublicConsentError("SUBMISSION_TEMPORARILY_UNAVAILABLE", "idempotency");
 	if (existing) {
 		return {
 			consentId: existing.id,
@@ -237,11 +238,8 @@ export async function generateAndSubmitConsent(
 		.select("id")
 		.single();
 
-	if (consentError || !consent) {
-		throw new Error(
-			`Error al guardar el consentimiento: ${consentError?.message || "desconocido"}`,
-		);
-	}
+	if (consentError || !consent)
+		throw new PublicConsentError("SUBMISSION_TEMPORARILY_UNAVAILABLE", "consent-write");
 
 	const clientSigner = getClientSigner(state, representation.represented);
 	const { error: signatureError } = await supabase
@@ -261,9 +259,7 @@ export async function generateAndSubmitConsent(
 
 	if (signatureError) {
 		await supabase.from("consents").delete().eq("id", consent.id);
-		throw new Error(
-			`Error al registrar la firma del cliente: ${signatureError.message}`,
-		);
+		throw new PublicConsentError("SUBMISSION_TEMPORARILY_UNAVAILABLE", "signature-write");
 	}
 
 	return {

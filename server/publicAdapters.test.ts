@@ -19,6 +19,7 @@ import { listPublicArtists } from "./publicArtists.js";
 import { generateAndSubmitConsent, signConsentAsArtist, toFinalizationErrorEnvelope } from "./consents.js";
 import { createVercelSupabaseClient } from "../utils/supabase/vercel.js";
 import { PublicBoundaryError } from "./publicStudio.js";
+import { PublicConsentError } from "./publicConsentErrors.js";
 import { getPublicArtists } from "./routes/publicArtists.js";
 import consentsRouter, { createConsent } from "./routes/consents.js";
 import vercelPublicArtists from "../api/public/artists.js";
@@ -156,8 +157,8 @@ describe("Express and Vercel public boundary envelopes", () => {
 
 		const expected = {
 			error: {
-				code: "ARTIST_NOT_AVAILABLE",
-				message: "El tatuador seleccionado no está disponible.",
+				code: "SUBMISSION_INVALID",
+				message: "Revisa los datos enviados e inténtalo de nuevo.",
 				retryable: false,
 			},
 		};
@@ -166,6 +167,43 @@ describe("Express and Vercel public boundary envelopes", () => {
 		expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
 			sensitiveMarker,
 		);
+	});
+
+	it.each([
+		[new PublicConsentError("REPRESENTATION_INVALID", "representation"), 422, "REPRESENTATION_INVALID", false, undefined],
+		[new PublicConsentError("SUBMISSION_CONFLICT", "idempotency"), 409, "SUBMISSION_CONFLICT", false, undefined],
+		[new PublicConsentError("SUBMISSION_TEMPORARILY_UNAVAILABLE", "consent-write"), 503, "SUBMISSION_TEMPORARILY_UNAVAILABLE", true, undefined],
+		[new Error("CANARY-RAW-DB-MESSAGE"), 500, "SUBMISSION_FAILED", true, undefined],
+		[new PublicBoundaryError("PUBLIC_STUDIO_CONTEXT_INVALID"), 503, "SUBMISSION_TEMPORARILY_UNAVAILABLE", false, "El estudio público no está disponible. Comprueba el enlace o contacta con el estudio."],
+	] as const)("returns safe equivalent consent failures", async (failure, status, code, retryable, message) => {
+		mockedGenerateConsent.mockRejectedValue(failure);
+		const body = { state: { marker: "CANARY-REQUEST" }, idempotencyKey: "synthetic-key", correlationId: "client-controlled" };
+		const express = expressResponse();
+		const vercel = vercelResponse();
+		await createConsent({ body } as Request, express.response);
+		await vercelCreateConsent(vercelRequest("POST", body), vercel.response);
+		for (const result of [express.result, vercel.result]) {
+			expect(result.statusCode).toBe(status);
+			expect(result.body).toMatchObject({ error: { code, retryable } });
+			if (message) expect((result.body as any).error.message).toBe(message);
+			const id = (result.body as any).error.correlationId;
+			expect(id).toMatch(/^[0-9a-f-]{36}$/);
+			expect(id).not.toBe("client-controlled");
+		}
+		const output = JSON.stringify(vi.mocked(console.error).mock.calls);
+		expect(output).not.toMatch(/CANARY|RAW-DB|client-controlled/);
+	});
+
+	it("classifies missing fields identically before invoking the service", async () => {
+		const express = expressResponse();
+		const vercel = vercelResponse();
+		await createConsent({ body: {} } as Request, express.response);
+		await vercelCreateConsent(vercelRequest("POST", {}), vercel.response);
+		expect(express.result.statusCode).toBe(400);
+		expect(vercel.result.statusCode).toBe(400);
+		expect((express.result.body as any).error.code).toBe("SUBMISSION_INVALID");
+		expect((vercel.result.body as any).error.code).toBe("SUBMISSION_INVALID");
+		expect(mockedGenerateConsent).not.toHaveBeenCalled();
 	});
 
 	it("emits the same stable finalization envelope from Express and Vercel sign-artist adapters", async () => {
