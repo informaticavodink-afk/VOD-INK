@@ -189,3 +189,82 @@ alter function private.protect_signed_consent_storage() owner to postgres;
 revoke all on function private.protect_signed_consent_storage() from PUBLIC, anon, authenticated, service_role;
 create trigger protect_signed_consent_storage before update or delete on storage.objects
 for each row execute function private.protect_signed_consent_storage();
+create table private.registration_attestation_contract_state (
+  singleton boolean primary key default true check (singleton),
+  contract_version text not null,
+  enabled boolean not null default false
+);
+insert into private.registration_attestation_contract_state(singleton,contract_version,enabled)
+values(true,'registration-only-v2',false);
+revoke all on private.registration_attestation_contract_state from PUBLIC, anon, authenticated, service_role;
+grant usage on schema private to service_role;
+grant select on private.registration_attestation_contract_state to service_role;
+grant select on public.profiles, public.studios to service_role;
+grant insert on public.audit_logs to service_role;
+create or replace function public.update_studio_settings_as_manager_v2(
+  p_actor_profile_id uuid,p_studio_id uuid,p_legal_name text,p_trade_name text,
+  p_tax_id text,p_address text,p_city text,p_postal_code text,p_phone text,
+  p_health_registration_number text,p_attest_health_data boolean,
+  p_contract_version text
+) returns table(outcome_code text,attested boolean,contract_version text)
+language plpgsql security invoker set search_path = '' as $$
+declare
+  v_current public.studios; v_registration text;
+  v_expected text; v_enabled boolean; v_outcome text; v_attested boolean;
+  v_actor_exists boolean; v_actor_allowed boolean; v_changed boolean;
+begin
+  select * into v_current from public.studios where id=p_studio_id for update;
+  if not found then return query select 'NOT_FOUND',false,'registration-only-v2'; return; end if;
+  select exists(select from public.profiles where id=p_actor_profile_id),
+    exists(select from public.profiles where id=p_actor_profile_id
+      and studio_id=p_studio_id and role='owner') into v_actor_exists,v_actor_allowed;
+  select s.contract_version,s.enabled into v_expected,v_enabled
+    from private.registration_attestation_contract_state s where s.singleton;
+  v_registration := nullif(btrim(p_health_registration_number,E' \t\n\r\f\v'),'');
+  if not v_actor_allowed then v_outcome := 'FORBIDDEN';
+  elsif v_expected is null or p_contract_version is distinct from v_expected then
+    v_outcome := 'CONTRACT_UNSUPPORTED';
+  elsif not v_enabled then v_outcome := 'CONTRACT_DISABLED';
+  elsif nullif(btrim(p_legal_name),'') is null or nullif(btrim(p_trade_name),'') is null
+    or nullif(btrim(p_tax_id),'') is null or nullif(btrim(p_address),'') is null
+    or nullif(btrim(p_city),'') is null or nullif(btrim(p_postal_code),'') is null
+    or nullif(btrim(p_phone),'') is null then v_outcome := 'REQUIRED_FIELDS_INVALID';
+  elsif not private.is_valid_registration_number(v_registration) then
+    v_outcome := 'REGISTRATION_INVALID';
+  else
+    v_changed := v_registration is distinct from
+      nullif(btrim(v_current.health_registration_number,E' \t\n\r\f\v'),'');
+    if v_changed then
+      v_outcome := 'REGISTRATION_CHANGED_REATTEST_REQUIRED'; v_attested := false;
+    elsif p_attest_health_data and v_current.health_data_verified_at is null then
+      v_outcome := 'REGISTRATION_ATTESTED'; v_attested := true;
+    elsif p_attest_health_data then
+      v_outcome := 'REGISTRATION_REATTESTED'; v_attested := true;
+    else
+      v_outcome := 'REGISTRATION_UNCHANGED';
+      v_attested := v_current.health_data_verified_at is not null;
+    end if;
+    update public.studios set legal_name=btrim(p_legal_name),trade_name=btrim(p_trade_name),
+      tax_id=btrim(p_tax_id),address=btrim(p_address),city=btrim(p_city),
+      postal_code=btrim(p_postal_code),phone=btrim(p_phone),
+      health_registration_number=v_registration,
+      health_data_verified_at=case when v_changed then null
+        when p_attest_health_data then timezone('utc',now()) else v_current.health_data_verified_at end,
+      updated_at=timezone('utc',now()) where id=p_studio_id;
+  end if;
+  v_attested := coalesce(v_attested,v_current.health_data_verified_at is not null);
+  insert into public.audit_logs(studio_id,actor_profile_id,action,metadata) values(
+    p_studio_id,case when v_actor_exists then p_actor_profile_id end,
+    'studio_registration_attestation_v2',jsonb_build_object(
+      'attempted_action',case when p_attest_health_data then 'ATTEST' else 'UPDATE' end,
+      'outcome_code',v_outcome,'attested',v_attested,
+      'contract_version',case when p_contract_version=v_expected then v_expected else 'unsupported' end));
+  return query select v_outcome,v_attested,coalesce(v_expected,'registration-only-v2');
+end $$;
+alter function public.update_studio_settings_as_manager_v2(uuid,uuid,text,text,text,text,text,text,text,text,boolean,text) owner to postgres;
+revoke all on function public.update_studio_settings_as_manager_v2(uuid,uuid,text,text,text,text,text,text,text,text,boolean,text)
+  from PUBLIC, anon, authenticated, service_role;
+grant execute on function public.update_studio_settings_as_manager_v2(uuid,uuid,text,text,text,text,text,text,text,text,boolean,text)
+  to service_role;
+revoke execute on function public.update_studio_settings_as_manager(uuid,uuid,text,text,text,text,text,text,text,text,date,boolean)
+  from service_role;
