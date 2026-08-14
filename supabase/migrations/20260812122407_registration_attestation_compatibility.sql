@@ -268,3 +268,62 @@ grant execute on function public.update_studio_settings_as_manager_v2(uuid,uuid,
   to service_role;
 revoke execute on function public.update_studio_settings_as_manager(uuid,uuid,text,text,text,text,text,text,text,text,date,boolean)
   from service_role;
+create or replace function public.get_studio_finalization_context_v2(
+  p_actor_profile_id uuid,p_studio_id uuid,p_contract_version text
+) returns table(outcome_code text,contract_version text,legal_name text,
+  trade_name text,tax_id text,address text,city text,postal_code text,
+  phone text,health_registration_number text)
+language plpgsql security invoker set search_path = '' as $$
+declare
+  v_studio public.studios; v_expected text; v_enabled boolean;
+  v_outcome text; v_registration text; v_actor_exists boolean; v_actor_allowed boolean;
+begin
+  select * into v_studio from public.studios where id=p_studio_id for share;
+  if not found then
+    return query select 'NOT_FOUND','registration-only-v2',null::text,null::text,
+      null::text,null::text,null::text,null::text,null::text,null::text;
+    return;
+  end if;
+  select exists(select from public.profiles where id=p_actor_profile_id),
+    exists(select from public.profiles where id=p_actor_profile_id and studio_id=p_studio_id)
+    into v_actor_exists,v_actor_allowed;
+  select s.contract_version,s.enabled into v_expected,v_enabled
+    from private.registration_attestation_contract_state s where s.singleton;
+  v_registration := nullif(btrim(v_studio.health_registration_number,E' \t\n\r\f\v'),'');
+  if not v_actor_allowed then
+    v_outcome := 'FORBIDDEN';
+  elsif v_expected is null or p_contract_version is distinct from v_expected then
+    v_outcome := 'CONTRACT_UNSUPPORTED';
+  elsif not v_enabled then v_outcome := 'CONTRACT_DISABLED';
+  elsif v_registration is null then v_outcome := 'REGISTRATION_MISSING';
+  elsif not private.is_valid_registration_number(v_registration) then
+    v_outcome := 'REGISTRATION_INVALID';
+  elsif v_studio.health_data_verified_at is null then
+    v_outcome := 'REGISTRATION_UNATTESTED';
+  elsif nullif(btrim(v_studio.legal_name),'') is null
+    or nullif(btrim(v_studio.trade_name),'') is null or nullif(btrim(v_studio.tax_id),'') is null
+    or nullif(btrim(v_studio.address),'') is null or nullif(btrim(v_studio.city),'') is null
+    or nullif(btrim(v_studio.postal_code),'') is null or nullif(btrim(v_studio.phone),'') is null then
+    v_outcome := 'STUDIO_CONTEXT_INVALID';
+  else v_outcome := 'READY';
+  end if;
+  insert into public.audit_logs(studio_id,actor_profile_id,action,metadata) values(
+    p_studio_id,case when v_actor_exists then p_actor_profile_id end,
+    'studio_finalization_context_v2',jsonb_build_object(
+      'outcome_code',v_outcome,'contract_version',
+      case when p_contract_version=v_expected then v_expected else 'unsupported' end));
+  return query select v_outcome,coalesce(v_expected,'registration-only-v2'),
+    case when v_outcome='READY' then btrim(v_studio.legal_name) end,
+    case when v_outcome='READY' then btrim(v_studio.trade_name) end,
+    case when v_outcome='READY' then btrim(v_studio.tax_id) end,
+    case when v_outcome='READY' then btrim(v_studio.address) end,
+    case when v_outcome='READY' then btrim(v_studio.city) end,
+    case when v_outcome='READY' then btrim(v_studio.postal_code) end,
+    case when v_outcome='READY' then btrim(v_studio.phone) end,
+    case when v_outcome='READY' then v_registration end;
+end $$;
+alter function public.get_studio_finalization_context_v2(uuid,uuid,text) owner to postgres;
+revoke all on function public.get_studio_finalization_context_v2(uuid,uuid,text)
+  from PUBLIC, anon, authenticated, service_role;
+grant execute on function public.get_studio_finalization_context_v2(uuid,uuid,text)
+  to service_role;
