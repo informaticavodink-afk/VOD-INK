@@ -124,3 +124,68 @@ end;
 $$;
 revoke all on function public.validate_consent_final_file()
   from PUBLIC, anon, authenticated;
+create or replace function public.protect_signed_consent_document()
+returns trigger language plpgsql set search_path = '' as $$ begin
+if tg_op = 'DELETE' then
+  if old.status = 'signed' then
+    raise exception using errcode = '23514', message = 'A signed consent cannot be deleted';
+  end if;
+  return old;
+end if;
+if old.status = 'signed' and new.status is distinct from 'signed' then
+  raise exception using errcode = '23514', message = 'A signed consent status is terminal';
+end if;
+if old.status = 'signed' and (new.document_snapshot is distinct from old.document_snapshot
+  or new.document_template_version is distinct from old.document_template_version
+  or new.final_file_id is distinct from old.final_file_id
+  or new.finalization_started_at is distinct from old.finalization_started_at
+  or new.finalized_at is distinct from old.finalized_at
+  or new.signed_at is distinct from old.signed_at
+  or new.legal_acceptance is distinct from old.legal_acceptance
+  or new.finalization_content_sha256 is distinct from old.finalization_content_sha256) then
+  raise exception using errcode = '23514', message = 'A signed consent document is immutable';
+end if;
+return new;
+end $$;
+create or replace function private.protect_signed_consent_file()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare signed_reference boolean;
+begin
+select c.status = 'signed' into signed_reference from public.consents c
+where c.final_file_id = old.id and c.status = 'signed' for share;
+if coalesce(signed_reference, false) then
+  if tg_op = 'DELETE' then raise exception using errcode = '23514',
+    message = 'A signed consent final file cannot be deleted'; end if;
+  if (to_jsonb(new) - array['drive_file_id','drive_view_link','drive_copy_claimed_at','drive_copy_completed_at'])
+    is distinct from (to_jsonb(old) - array['drive_file_id','drive_view_link','drive_copy_claimed_at','drive_copy_completed_at']) then
+    raise exception using errcode = '23514', message = 'A signed consent final file is immutable';
+  end if;
+end if;
+if tg_op = 'DELETE' then return old; end if; return new;
+end $$;
+alter function private.protect_signed_consent_file() owner to postgres;
+revoke all on function private.protect_signed_consent_file() from PUBLIC, anon, authenticated, service_role;
+drop trigger if exists consent_files_protect_signed_relationship on public.consent_files;
+create trigger consent_files_protect_signed_relationship before update or delete
+on public.consent_files for each row execute function private.protect_signed_consent_file();
+drop trigger consents_protect_signed_document on public.consents;
+create trigger consents_protect_signed_document before update or delete on public.consents
+for each row execute function public.protect_signed_consent_document();
+alter table public.consent_files drop constraint consent_files_consent_id_fkey;
+alter table public.consent_files add constraint consent_files_consent_id_fkey
+foreign key (consent_id) references public.consents(id) on delete restrict;
+create or replace function private.protect_signed_consent_storage()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare signed_reference boolean;
+begin
+select c.status = 'signed' into signed_reference from public.consent_files f
+join public.consents c on c.final_file_id = f.id
+where f.bucket_id = old.bucket_id and f.storage_path = old.name for share of c;
+if coalesce(signed_reference, false) then raise exception using errcode = '23514',
+  message = 'A signed consent Storage object is immutable'; end if;
+if tg_op = 'DELETE' then return old; end if; return new;
+end $$;
+alter function private.protect_signed_consent_storage() owner to postgres;
+revoke all on function private.protect_signed_consent_storage() from PUBLIC, anon, authenticated, service_role;
+create trigger protect_signed_consent_storage before update or delete on storage.objects
+for each row execute function private.protect_signed_consent_storage();
