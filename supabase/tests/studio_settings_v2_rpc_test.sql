@@ -22,7 +22,7 @@ select ok(has_function_privilege('service_role','public.update_studio_settings_a
 select ok(not has_function_privilege('authenticated','public.update_studio_settings_as_manager_v2(uuid,uuid,text,text,text,text,text,text,text,text,boolean,text)','execute'),'authenticated cannot execute v2 RPC');
 select ok(not has_function_privilege('anon','public.update_studio_settings_as_manager_v2(uuid,uuid,text,text,text,text,text,text,text,text,boolean,text)','execute'),'anon cannot execute v2 RPC');
 select ok(not exists(select from aclexplode((select proacl from pg_proc where oid=to_regprocedure('public.update_studio_settings_as_manager_v2(uuid,uuid,text,text,text,text,text,text,text,text,boolean,text)'))) where grantee=0 and privilege_type='EXECUTE'),'PUBLIC cannot execute v2 RPC');
-select ok(not has_function_privilege('service_role','public.update_studio_settings_as_manager(uuid,uuid,text,text,text,text,text,text,text,text,date,boolean)','execute'),'legacy date RPC execute is revoked');
+select ok(has_function_privilege('service_role','public.update_studio_settings_as_manager(uuid,uuid,text,text,text,text,text,text,text,text,date,boolean)','execute'),'legacy date RPC remains executable during disabled compatibility rollout');
 select ok(has_table_privilege('service_role','private.registration_attestation_contract_state','select'),'service_role can read exact contract row');
 select ok(not has_table_privilege('authenticated','private.registration_attestation_contract_state','select'),'authenticated cannot read contract row');
 

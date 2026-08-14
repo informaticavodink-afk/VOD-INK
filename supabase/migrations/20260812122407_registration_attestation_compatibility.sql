@@ -266,8 +266,6 @@ revoke all on function public.update_studio_settings_as_manager_v2(uuid,uuid,tex
   from PUBLIC, anon, authenticated, service_role;
 grant execute on function public.update_studio_settings_as_manager_v2(uuid,uuid,text,text,text,text,text,text,text,text,boolean,text)
   to service_role;
-revoke execute on function public.update_studio_settings_as_manager(uuid,uuid,text,text,text,text,text,text,text,text,date,boolean)
-  from service_role;
 create or replace function public.get_studio_finalization_context_v2(
   p_actor_profile_id uuid,p_studio_id uuid,p_contract_version text
 ) returns table(outcome_code text,contract_version text,legal_name text,
