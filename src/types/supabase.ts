@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   public: {
     Tables: {
       artists: {
@@ -593,14 +588,33 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_studio_finalization_context_v2: {
+        Args: {
+          p_actor_profile_id: string
+          p_contract_version: string
+          p_studio_id: string
+        }
+        Returns: {
+          address: string
+          city: string
+          contract_version: string
+          health_registration_number: string
+          legal_name: string
+          outcome_code: string
+          phone: string
+          postal_code: string
+          tax_id: string
+          trade_name: string
+        }[]
+      }
       update_studio_settings_as_manager: {
         Args: {
           p_actor_profile_id: string
           p_address: string
           p_attest_health_data?: boolean
           p_city: string
-          p_health_authorization_date: string | null
-          p_health_registration_number: string | null
+          p_health_authorization_date: string
+          p_health_registration_number: string
           p_legal_name: string
           p_phone: string
           p_postal_code: string
@@ -608,7 +622,49 @@ export type Database = {
           p_tax_id: string
           p_trade_name: string
         }
-        Returns: Database["public"]["Tables"]["studios"]["Row"]
+        Returns: {
+          address: string | null
+          city: string | null
+          created_at: string
+          health_authorization_date: string | null
+          health_data_verified_at: string | null
+          health_registration_number: string | null
+          id: string
+          legal_name: string
+          phone: string | null
+          postal_code: string | null
+          slug: string
+          tax_id: string | null
+          trade_name: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studios"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_studio_settings_as_manager_v2: {
+        Args: {
+          p_actor_profile_id: string
+          p_address: string
+          p_attest_health_data: boolean
+          p_city: string
+          p_contract_version: string
+          p_health_registration_number: string
+          p_legal_name: string
+          p_phone: string
+          p_postal_code: string
+          p_studio_id: string
+          p_tax_id: string
+          p_trade_name: string
+        }
+        Returns: {
+          attested: boolean
+          contract_version: string
+          outcome_code: string
+        }[]
       }
     }
     Enums: {
