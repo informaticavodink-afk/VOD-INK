@@ -1,3 +1,19 @@
+lock table public.consent_files in share row exclusive mode;
+lock table public.consents in share row exclusive mode;
+do $$ begin
+  if exists (select 1 from public.consents c left join public.consent_files f
+    on f.id = c.final_file_id and f.consent_id = c.id and f.document_kind = 'final'
+    where c.status = 'signed' and f.id is null) then
+    raise exception using errcode = '23514',
+      message = 'Signed consent history contains an invalid final file relationship';
+  end if;
+  if exists (select 1 from public.consents where status = 'signed' and
+    (document_template_version is null or document_template_version not in
+      ('legacy','consent-v2','consent-v3-representation','consent-v4-registration-only'))) then
+    raise exception using errcode = '23514',
+      message = 'Signed consent history contains a null or unsupported document version';
+  end if;
+end $$;
 create or replace function private.normalize_registration_number(value text)
 returns text language sql immutable parallel safe security invoker set search_path = ''
 as $$ select btrim(value, E' \t\n\r\f\v') $$;
@@ -59,3 +75,52 @@ grant update (
   created_at, updated_at
 ) on public.studios to authenticated;
 grant update on public.studios to service_role;
+create or replace function private.assert_all_signed_consent_history_supported()
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if exists (select 1 from public.consents c left join public.consent_files f
+    on f.id = c.final_file_id and f.consent_id = c.id and f.document_kind = 'final'
+    where c.status = 'signed' and f.id is null) then
+    raise exception using errcode = '23514',
+      message = 'Signed consent history contains an invalid final file relationship';
+  end if;
+  if exists (select 1 from public.consents where status = 'signed' and
+    (document_template_version is null or document_template_version not in
+      ('legacy','consent-v2','consent-v3-representation','consent-v4-registration-only'))) then
+    raise exception using errcode = '23514',
+      message = 'Signed consent history contains a null or unsupported document version';
+  end if;
+end;
+$$;
+alter function private.assert_all_signed_consent_history_supported() owner to postgres;
+revoke all on function private.assert_all_signed_consent_history_supported()
+  from PUBLIC, anon, authenticated, service_role;
+select private.assert_all_signed_consent_history_supported();
+create or replace function public.validate_consent_final_file()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+declare
+  matched boolean := false;
+begin
+  if new.status = 'signed' and new.document_template_version is null then
+    raise exception using errcode = '23514',
+      message = 'A signed consent requires document_template_version';
+  end if;
+  if new.final_file_id is null then
+    if new.status = 'signed' then
+      raise exception using errcode = '23514',
+        message = 'A signed consent requires final_file_id';
+    end if;
+    return new;
+  end if;
+  perform 1 from public.consent_files f where f.id = new.final_file_id
+    and f.consent_id = new.id and f.document_kind = 'final' for share;
+  matched := found;
+  if not matched then
+    raise exception using errcode = '23514',
+message = 'final_file_id must reference this consent final document';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.validate_consent_final_file()
+  from PUBLIC, anon, authenticated;
