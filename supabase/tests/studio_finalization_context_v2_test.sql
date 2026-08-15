@@ -20,7 +20,7 @@ select ok(not has_function_privilege('authenticated','public.get_studio_finaliza
 select ok(not has_function_privilege('anon','public.get_studio_finalization_context_v2(uuid,uuid,text)','execute'),'anon cannot execute readiness');
 select ok(not exists(select from aclexplode((select proacl from pg_proc where oid=to_regprocedure('public.get_studio_finalization_context_v2(uuid,uuid,text)'))) where grantee=0 and privilege_type='EXECUTE'),'PUBLIC cannot execute readiness');
 select ok(has_function_privilege('service_role','public.update_studio_settings_as_manager_v2(uuid,uuid,text,text,text,text,text,text,text,text,boolean,text)','execute'),'settings v2 remains executable');
-select ok(not has_function_privilege('service_role','public.update_studio_settings_as_manager(uuid,uuid,text,text,text,text,text,text,text,text,date,boolean)','execute'),'legacy signature remains installed but revoked before activation');
+select ok(has_function_privilege('service_role','public.update_studio_settings_as_manager(uuid,uuid,text,text,text,text,text,text,text,text,date,boolean)','execute'),'legacy signature remains executable during disabled compatibility rollout');
 
 select is(pg_temp.ready('64000000-0000-4000-8000-000000000001','64000000-0000-4000-8002-000000000001')->>'outcome_code','CONTRACT_DISABLED','disabled contract fails closed');
 select ok((jsonb_strip_nulls(pg_temp.ready('64000000-0000-4000-8000-000000000001','64000000-0000-4000-8002-000000000001')) - array['outcome_code','contract_version']) = '{}'::jsonb,'disabled result reveals no studio projection');

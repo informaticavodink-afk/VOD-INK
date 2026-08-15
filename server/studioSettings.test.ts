@@ -137,4 +137,14 @@ describe('studio settings persistence boundary', () => {
     expect(migration).toMatch(/revoke all on function[\s\S]+from public, anon, authenticated/i);
     expect(migration).toMatch(/grant execute on function[\s\S]+to service_role/i);
   });
+
+  it('keeps the legacy service-role RPC executable while v2 is disabled', () => {
+    const migration = readFileSync(
+      'supabase/migrations/20260812122407_registration_attestation_compatibility.sql',
+      'utf8'
+    );
+    expect(migration).not.toMatch(
+      /revoke execute on function public\.update_studio_settings_as_manager\([\s\S]*?from service_role/i
+    );
+  });
 });
