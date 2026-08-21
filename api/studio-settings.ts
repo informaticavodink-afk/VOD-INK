@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createServiceClient } from '../server/supabase.js';
-import { getCurrentManagerProfile, getErrorMessage } from '../server/admins.js';
+import { getCurrentManagerProfile } from '../server/admins.js';
+import { toStudioSettingsErrorResponse } from '../server/studioSettingsBoundary.js';
 import { getStudioSettings, updateStudioSettings } from '../server/studioSettings.js';
 import { createVercelSupabaseClient } from '../utils/supabase/vercel.js';
 import { parseBody } from './_lib/parseBody.js';
@@ -9,13 +10,6 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
   res.setHeader('Content-Type', 'application/json');
   res.statusCode = status;
   res.end(JSON.stringify(data));
-}
-
-function statusFor(message: string) {
-  if (message === 'No autenticado') return 401;
-  if (message.includes('permisos') || message.includes('FORBIDDEN')) return 403;
-  if (message.includes('no encontró')) return 404;
-  return 400;
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -42,8 +36,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     sendJson(res, 200, { studio });
   } catch (error) {
-    const message = getErrorMessage(error);
-    console.error(`[api/studio-settings] ${req.method} failed:`, error);
-    sendJson(res, statusFor(message), { error: message });
+    const response = toStudioSettingsErrorResponse(error);
+    console.error(`[api/studio-settings] ${req.method} failed with status ${response.status}`);
+    sendJson(res, response.status, response.body);
   }
 }

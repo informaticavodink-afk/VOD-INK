@@ -1,16 +1,10 @@
 import { Router, type Request, type Response } from 'express';
 import { createServiceClient } from '../supabase.js';
-import { getCurrentManagerProfile, getErrorMessage } from '../admins.js';
+import { getCurrentManagerProfile } from '../admins.js';
+import { toStudioSettingsErrorResponse } from '../studioSettingsBoundary.js';
 import { getStudioSettings, updateStudioSettings } from '../studioSettings.js';
 
 const router = Router();
-
-function statusFor(message: string) {
-  if (message === 'No autenticado') return 401;
-  if (message.includes('permisos') || message.includes('FORBIDDEN')) return 403;
-  if (message.includes('no encontró')) return 404;
-  return 400;
-}
 
 export async function readStudioSettings(req: Request, res: Response) {
   try {
@@ -19,9 +13,9 @@ export async function readStudioSettings(req: Request, res: Response) {
     const studio = await getStudioSettings(profile, serviceClient);
     return res.status(200).json({ studio });
   } catch (error) {
-    const message = getErrorMessage(error);
-    console.error('[studio-settings] GET failed:', error);
-    return res.status(statusFor(message)).json({ error: message });
+    const response = toStudioSettingsErrorResponse(error);
+    console.error(`[studio-settings] ${req.method} failed with status ${response.status}`);
+    return res.status(response.status).json(response.body);
   }
 }
 
@@ -32,9 +26,9 @@ export async function saveStudioSettings(req: Request, res: Response) {
     const studio = await updateStudioSettings(profile, req.body, serviceClient);
     return res.status(200).json({ studio });
   } catch (error) {
-    const message = getErrorMessage(error);
-    console.error('[studio-settings] PATCH failed:', error);
-    return res.status(statusFor(message)).json({ error: message });
+    const response = toStudioSettingsErrorResponse(error);
+    console.error(`[studio-settings] ${req.method} failed with status ${response.status}`);
+    return res.status(response.status).json(response.body);
   }
 }
 
