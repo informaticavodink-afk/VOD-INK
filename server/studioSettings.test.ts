@@ -112,7 +112,12 @@ describe('studio settings persistence boundary', () => {
   });
 
   it('sends actor and studio ids to the service-role-only atomic RPC', async () => {
-    const rpc = vi.fn().mockResolvedValue({ data: studio, error: null });
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({
+        data: [{ contract_version: 'registration-only-v2', enabled: false }],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: studio, error: null });
 
     await expect(updateStudioSettings(profile as never, validPayload, { rpc } as never)).resolves.toEqual(studio);
     expect(rpc).toHaveBeenCalledWith(
@@ -124,6 +129,151 @@ describe('studio settings persistence boundary', () => {
         p_health_registration_number: 'REG-REAL-001',
       })
     );
+  });
+
+  it('keeps the complete legacy payload on the legacy RPC while the contract is disabled', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({
+        data: [{ contract_version: 'registration-only-v2', enabled: false }],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: studio, error: null });
+
+    await expect(updateStudioSettings(profile as never, validPayload, { rpc } as never)).resolves.toEqual(studio);
+
+    expect(rpc).toHaveBeenNthCalledWith(1, 'get_registration_attestation_contract_state', {});
+    expect(rpc).toHaveBeenNthCalledWith(
+      2,
+      'update_studio_settings_as_manager',
+      expect.objectContaining({ p_health_authorization_date: '2025-01-10' })
+    );
+    expect(rpc).not.toHaveBeenCalledWith('update_studio_settings_as_manager_v2', expect.anything());
+  });
+
+  it('maps a disabled-contract legacy RPC error without fetching or switching to v2', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({
+        data: [{ contract_version: 'registration-only-v2', enabled: false }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: new Error('password=super-secret backend diagnostic'),
+      });
+    const from = vi.fn();
+    const client = { rpc, from };
+
+    await expect(updateStudioSettings(profile as never, validPayload, client as never))
+      .rejects.toThrow('No se pudo actualizar el estudio');
+
+    expect(rpc).not.toHaveBeenCalledWith('update_studio_settings_as_manager_v2', expect.anything());
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('uses v2 without forwarding the legacy date while the contract is enabled', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({
+        data: [{ contract_version: 'registration-only-v2', enabled: true }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ outcome_code: 'REGISTRATION_UNCHANGED', attested: true, contract_version: 'registration-only-v2' }],
+        error: null,
+      });
+    const single = vi.fn().mockResolvedValue({ data: studio, error: null });
+    const eq = vi.fn(() => ({ single }));
+    const select = vi.fn(() => ({ eq }));
+    const client = { rpc, from: vi.fn(() => ({ select })) };
+
+    await expect(updateStudioSettings(profile as never, validPayload, client as never)).resolves.toEqual(studio);
+
+    expect(rpc).toHaveBeenNthCalledWith(
+      2,
+      'update_studio_settings_as_manager_v2',
+      {
+        p_actor_profile_id: profile.id,
+        p_studio_id: profile.studio_id,
+        p_legal_name: 'Estudio Legal',
+        p_trade_name: 'Estudio Comercial',
+        p_tax_id: 'TEST-ID',
+        p_address: 'Calle Test 1',
+        p_city: 'Santander',
+        p_postal_code: '39001',
+        p_phone: '600000000',
+        p_health_registration_number: 'REG-REAL-001',
+        p_attest_health_data: true,
+        p_contract_version: 'registration-only-v2',
+      }
+    );
+    expect(rpc).not.toHaveBeenCalledWith('update_studio_settings_as_manager', expect.anything());
+  });
+
+  it('returns the generic settings error when the enabled v2 RPC rejects without fetching or falling back', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({
+        data: [{ contract_version: 'registration-only-v2', enabled: true }],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: null, error: new Error('permission denied') });
+    const from = vi.fn();
+    const client = { rpc, from };
+
+    await expect(updateStudioSettings(profile as never, validPayload, client as never))
+      .rejects.toThrow('No se pudo actualizar el estudio');
+
+    expect(rpc).toHaveBeenNthCalledWith(2, 'update_studio_settings_as_manager_v2', {
+      p_actor_profile_id: profile.id,
+      p_studio_id: profile.studio_id,
+      p_legal_name: 'Estudio Legal',
+      p_trade_name: 'Estudio Comercial',
+      p_tax_id: 'TEST-ID',
+      p_address: 'Calle Test 1',
+      p_city: 'Santander',
+      p_postal_code: '39001',
+      p_phone: '600000000',
+      p_health_registration_number: 'REG-REAL-001',
+      p_attest_health_data: true,
+      p_contract_version: 'registration-only-v2',
+    });
+    expect(rpc).not.toHaveBeenCalledWith('update_studio_settings_as_manager', expect.anything());
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('returns the generic settings error for an unsupported enabled v2 outcome without fetching or falling back', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({
+        data: [{ contract_version: 'registration-only-v2', enabled: true }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ outcome_code: 'REGISTRATION_REJECTED', contract_version: 'registration-only-v2' }],
+        error: null,
+      });
+    const from = vi.fn();
+    const client = { rpc, from };
+
+    await expect(updateStudioSettings(profile as never, validPayload, client as never))
+      .rejects.toThrow('No se pudo actualizar el estudio');
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc).not.toHaveBeenCalledWith('update_studio_settings_as_manager', expect.anything());
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['returns an RPC error', { data: null, error: new Error('reader unavailable') }],
+    ['returns no state', { data: [], error: null }],
+    ['returns multiple states', { data: [{ contract_version: 'registration-only-v2', enabled: false }, { contract_version: 'registration-only-v2', enabled: false }], error: null }],
+    ['returns an unexpected version', { data: [{ contract_version: 'other', enabled: false }], error: null }],
+    ['returns a malformed enabled state', { data: [{ contract_version: 'registration-only-v2', enabled: 'false' }], error: null }],
+  ])('fails closed without a settings mutation when the reader %s', async (_description, response) => {
+    const rpc = vi.fn().mockResolvedValueOnce(response);
+
+    await expect(updateStudioSettings(profile as never, validPayload, { rpc } as never))
+      .rejects.toThrow('No se pudo actualizar el estudio');
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('get_registration_attestation_contract_state', {});
   });
 
   it('defines an atomic SECURITY INVOKER function unavailable to browser roles', () => {
