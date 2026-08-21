@@ -113,6 +113,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
       .from('consent_files')
       .select('storage_path')
       .eq('id', consent.final_file_id)
+      .eq('consent_id', consent.id)
       .eq('document_kind', 'final')
       .single();
 

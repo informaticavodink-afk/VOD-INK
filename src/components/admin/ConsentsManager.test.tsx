@@ -111,7 +111,8 @@ describe('ConsentsManager immutable individual download', () => {
 
     await waitFor(() => expect(click).toHaveBeenCalledOnce());
     expect(harness.fileQuery.eq).toHaveBeenNthCalledWith(1, 'id', 'final-file-a');
-    expect(harness.fileQuery.eq).toHaveBeenNthCalledWith(2, 'document_kind', 'final');
+    expect(harness.fileQuery.eq).toHaveBeenNthCalledWith(2, 'consent_id', 'consent-tenant-safe');
+    expect(harness.fileQuery.eq).toHaveBeenNthCalledWith(3, 'document_kind', 'final');
     expect(harness.storage.download).toHaveBeenCalledWith('studio-a/final-file-a.pdf');
     expect(clickedAnchor?.download).toBe('Consentimiento_consent-tenant-safe.pdf');
     expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:final-file-a');
@@ -155,6 +156,25 @@ describe('ConsentsManager immutable individual download', () => {
 });
 
 describe('ConsentsManager truthful ZIP export', () => {
+  it('keeps one synthetic minor final identity across list, PDF download and ZIP', async () => {
+    harness.listQuery.order.mockResolvedValue({ data: [{ ...harness.consent, is_minor: true }], error: null });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    render(<ConsentsManager studioId="studio-a" />);
+
+    expect(await screen.findByText('Cliente Sintetico')).toBeVisible();
+    await userEvent.setup().click(screen.getByRole('button', { name: /ver \/ descargar/i }));
+    await waitFor(() => expect(harness.storage.download).toHaveBeenCalledTimes(1));
+    await userEvent.setup().click(screen.getByRole('button', { name: /exportar todos/i }));
+
+    expect(await screen.findByText('Exportados: 1. Omitidos: 0. Fallidos: 0.')).toBeVisible();
+    expect(harness.fileQuery.eq).toHaveBeenCalledWith('id', 'final-file-a');
+    expect(harness.fileQuery.eq).toHaveBeenCalledWith('consent_id', 'consent-tenant-safe');
+    expect(harness.fileQuery.in).toHaveBeenCalledWith('id', ['final-file-a']);
+    expect(harness.storage.download).toHaveBeenNthCalledWith(1, 'studio-a/final-file-a.pdf');
+    expect(harness.storage.download).toHaveBeenNthCalledWith(2, 'studio-a/final-file-a.pdf');
+    expect(click).toHaveBeenCalledTimes(2);
+  });
+
   it('reports actual partial counts and queries only authenticated final metadata', async () => {
     harness.listQuery.order.mockResolvedValue({
       data: [harness.consent, { ...harness.consent, id: 'pending-b', status: 'pending_artist', final_file_id: null }],
