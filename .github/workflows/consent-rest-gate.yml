@@ -1,0 +1,30 @@
+name: Consent REST gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  consent-artist-embed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Start owned local Supabase stack
+        run: npx supabase start --exclude realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor,mailpit
+      - name: Export local-only credentials
+        run: npx supabase status --output env >> "$GITHUB_ENV"
+      - name: Run mandatory release tests
+        run: npm test
+      - name: Stop only this workflow's stack
+        if: always()
+        run: npx supabase stop --project-id Vod-INK --no-backup
