@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 
 vi.mock('./supabase.js', () => ({ createServiceClient: vi.fn() }));
 vi.mock('./drive.js', () => ({ uploadToDrive: vi.fn() }));
@@ -65,6 +66,28 @@ const validTechnique = {
   tintas: [{ nombre: 'Negro real', numRegistroAEMPS: 'AEMPS-1', lote: 'LOTE-1', caducidad: '2029-01-01' }],
   otrosMateriales: 'Material estéril', duracion: 'Dos horas', posibilidadesEliminacion: 'Láser', presupuesto: '200 EUR',
 };
+
+function syntheticMinorState(): WizardState {
+  return {
+    pasoActual: 4,
+    artistaSeleccionado: { id: 'artist-memory', nombreYApellidos: 'SYNTHETIC ARTIST', titulacion: 'SYNTHETIC TITLE' },
+    datosCliente: {
+      nombreYApellidos: 'SYNTHETIC MINOR', dni: '12345678Z', fechaNacimiento: '2010-04-05',
+      domicilio: 'SYNTHETIC STREET 1', cp: '39001', localidad: 'SYNTHETIC CITY', telefono: '600000000',
+    },
+    esMenor: true,
+    tieneRepresentanteLegal: true,
+    datosRepresentante: {
+      nombreYApellidos: 'SYNTHETIC REPRESENTATIVE', dni: '12345678Z', fechaNacimiento: '1980-02-03',
+      domicilio: 'SYNTHETIC STREET 2', cp: '39002', localidad: 'SYNTHETIC CITY', telefono: '611111111',
+      parentesco: 'SYNTHETIC RELATION', acreditaMediante: 'SYNTHETIC DOCUMENT',
+    },
+    datosTecnica: validTechnique,
+    declaracionLeido: true, declaracionContraindicaciones: true, declaracionSaludSeleccionadas: [],
+    confirmadoPrecio: true, firmaCliente: 'data:image/png;base64,iVBORw0KGgoSYNTHETIC', firmaAplicador: '',
+    lugar: 'SYNTHETIC CITY', fecha: '2026-08-21',
+  };
+}
 
 function invalidWizardState(): WizardState {
   return {
@@ -375,6 +398,7 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
         signedUpdates: 0,
         uploadErrorFilters: [],
         driveClaims: [],
+        signatureUpserts: [],
       };
       let failedFileBefore = false;
       let failedFileAfter = false;
@@ -489,6 +513,7 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
         }
         if (query.table === 'consent_signatures') {
           state.signatureRecord = { ...query.payload };
+          calls.signatureUpserts.push({ payload: state.signatureRecord, options: query.options });
           return result();
         }
         return result();
@@ -496,7 +521,7 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
       const from = vi.fn((table: string) => {
         calls.from.push(table);
         const query: any = {
-          table, operation: 'select', columns: '*', filters: [], payload: null,
+          table, operation: 'select', columns: '*', filters: [], payload: null, options: null,
           select: vi.fn((columns: string) => { query.columns = columns; return query; }),
           eq: vi.fn((key: string, value: unknown) => { query.filters.push({ kind: 'eq', key, value }); return query; }),
           is: vi.fn((key: string, value: unknown) => { query.filters.push({ kind: 'is', key, value }); return query; }),
@@ -504,7 +529,7 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
           lt: vi.fn((key: string, value: unknown) => { query.filters.push({ kind: 'lt', key, value }); return query; }),
           update: vi.fn((payload: unknown) => { query.operation = 'update'; query.payload = payload; return query; }),
           insert: vi.fn((payload: unknown) => { query.operation = 'insert'; query.payload = payload; return query; }),
-          upsert: vi.fn((payload: unknown) => { query.operation = 'upsert'; query.payload = payload; return query; }),
+          upsert: vi.fn((payload: unknown, options: unknown) => { query.operation = 'upsert'; query.payload = payload; query.options = options; return query; }),
           single: vi.fn(() => execute(query)),
           maybeSingle: vi.fn(() => execute(query)),
         };
@@ -584,6 +609,82 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
             mockedGeneratePdf.mockResolvedValue({ base64: 'c3ludGhldGlj', blob: new Blob(), fileName: 'synthetic.pdf' });
             mockedUploadToDrive.mockResolvedValue({ driveFileId: 'drive-memory', driveViewLink: 'https://drive.invalid/memory' });
           });
+
+          it('carries a complete synthetic minor and representative attribution through artist finalization', async () => {
+            const state = syntheticMinorState();
+            let insertedConsent: Record<string, unknown> | undefined;
+            const consentInsert = vi.fn((payload: Record<string, unknown>) => {
+              insertedConsent = payload;
+              const chain = { select: vi.fn(), single: vi.fn().mockResolvedValue({ data: { id: 'consent-memory' }, error: null }) };
+              chain.select.mockReturnValue(chain);
+              return chain;
+            });
+            const publicSignatureUpsert = vi.fn().mockResolvedValue({ error: null });
+            const consentTable = {
+              select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }), insert: consentInsert,
+            };
+            const submissionClient = { from: vi.fn((table: string) => table === 'consents' ? consentTable : { upsert: publicSignatureUpsert }) };
+            const finalization = memoryFinalizationClient();
+            mockedCreateServiceClient.mockReturnValueOnce(submissionClient as never);
+            mockedResolvePublicStudio.mockResolvedValue({ id: 'studio-memory' } as never);
+            mockedResolveArtist.mockResolvedValue({ id: 'artist-memory' } as never);
+            const writeFile = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
+
+            await expect(generateAndSubmitConsent(state, 'synthetic-minor-key')).resolves.toMatchObject({
+              consentId: 'consent-memory', status: 'pending_technique',
+            });
+            const representativePersistence = {
+              representative_full_name: 'SYNTHETIC REPRESENTATIVE', representative_dni: '12345678Z',
+              representative_birth_date: '1980-02-03', representative_phone: '611111111',
+              representative_address: 'SYNTHETIC STREET 2', representative_postal_code: '39002',
+              representative_city: 'SYNTHETIC CITY', representative_relationship: 'SYNTHETIC RELATION',
+              representative_accreditation: 'SYNTHETIC DOCUMENT',
+            };
+            expect(insertedConsent).toMatchObject({
+              is_minor: true, has_legal_representative: true,
+              client_birth_date: '2010-04-05', client_phone: '600000000',
+              ...representativePersistence,
+            });
+            expect(publicSignatureUpsert).toHaveBeenCalledWith(expect.objectContaining({
+              consent_id: 'consent-memory', studio_id: 'studio-memory', artist_id: 'artist-memory',
+              signer_type: 'representative', signer_name: 'SYNTHETIC REPRESENTATIVE',
+              signature_hash: createHash('sha256').update(state.firmaCliente).digest('hex'),
+              metadata: { source: 'public_wizard' },
+            }), { onConflict: 'consent_id,signer_type' });
+
+            Object.assign(finalization.state.consent, insertedConsent, { status: 'pending_artist' });
+            await expect(signConsentAsArtist('consent-memory', 'synthetic-artist-signature', 'user-memory'))
+              .resolves.toMatchObject({ consentId: 'consent-memory', status: 'signed' });
+            expect(mockedBuildPdfData).toHaveBeenCalledWith(expect.objectContaining({
+              consent: expect.objectContaining(representativePersistence),
+            }));
+            expect(finalization.state.signatureRecord).toEqual({
+              consent_id: 'consent-memory', studio_id: 'studio-memory', artist_id: 'artist-memory',
+              signer_type: 'artist', signer_name: 'Artista Sintética',
+              signature_hash: createHash('sha256').update('synthetic-artist-signature').digest('hex'),
+              metadata: { source: 'artist_panel', storage_path: finalization.state.finalFile.storage_path },
+            });
+            expect(finalization.calls.signatureUpserts).toEqual([{
+              payload: finalization.state.signatureRecord,
+              options: { onConflict: 'consent_id,signer_type' },
+            }]);
+            expect(finalization.state.consent).toMatchObject({ status: 'signed', final_file_id: 'file-memory' });
+            writeFile.mockRestore();
+          });
+
+          it.each(['fechaNacimiento', 'telefono'] as const)(
+            'rejects a synthetic minor missing representative %s before persistence',
+            async (field) => {
+              const state = syntheticMinorState();
+              state.datosRepresentante[field] = '';
+
+              await expect(generateAndSubmitConsent(state, 'synthetic-invalid-key')).rejects.toMatchObject({
+                code: 'REPRESENTATION_INVALID', stage: 'representation',
+              });
+              expect(mockedCreateServiceClient).not.toHaveBeenCalled();
+            },
+          );
 
           it('reuses one deterministic artifact across repeated calls and claims Drive once', async () => {
             const harness = memoryFinalizationClient();
