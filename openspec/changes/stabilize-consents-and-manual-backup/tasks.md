@@ -21,7 +21,7 @@ Strict-TDD evidence accompanies each <=300-line PR; split before review if excee
 - [x] 1.1 **PR 1 (140-240):** RED/GREEN the explicit composite artist embed and tenant-safe list in `ConsentsManager*`.
 - [ ] 1.2 **PR 2 (160-280):** Make local Supabase/PostgREST and two-FK checks mandatory; unqualified embed or unavailable REST MUST fail release. Implementation ready; remote enforcement awaits 1.9.
 - [x] 1.3 **PR 3 (160-260):** RED/GREEN immutable download, safe filename, unavailable/unauthorized errors and no false success.
-- [ ] 1.4 **PR 4 (180-290):** Test ZIP counts, unique names, opaque diagnostics, cleanup, partial and zero-success; extract coordinator.
+- [x] 1.4 **PR 4 (180-290):** Test ZIP counts, unique names, opaque diagnostics, cleanup, partial and zero-success; extract coordinator.
 - [ ] 1.5 **PR 5 (120-220):** Wire truthful ZIP UI counts/refusal to `ConsentsManager`; keep coordinator tests with behavior.
 - [ ] 1.6 **PR 6 (180-290):** Prove synthetic minor submission/finalization and complete representative record including birth date/phone and signature attribution.
 - [ ] 1.7 **PR 7 (140-260):** Prove PDF/list/download/ZIP identity; audit two reported attempts read-only as opaque found/not-found/inconclusive, assuming nothing.
