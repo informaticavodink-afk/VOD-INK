@@ -19,6 +19,14 @@ export type StudioSettingsPayload = {
 
 const DEMO_HEALTH_REGISTRATION = 'SAN/07/2024-C';
 const DEMO_HEALTH_DATE = '2024-06-15';
+const CONTRACT_VERSION = 'registration-only-v2';
+const CONTRACT_STATE_RPC = 'get_registration_attestation_contract_state';
+const ACCEPTED_V2_OUTCOMES = new Set([
+  'REGISTRATION_CHANGED_REATTEST_REQUIRED',
+  'REGISTRATION_ATTESTED',
+  'REGISTRATION_REATTESTED',
+  'REGISTRATION_UNCHANGED',
+]);
 const MADRID_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   timeZone: 'Europe/Madrid',
   year: 'numeric',
@@ -112,6 +120,46 @@ export function parseStudioSettingsPayload(payload: StudioSettingsPayload) {
   };
 }
 
+function parseRegistrationOnlyStudioSettingsPayload(payload: StudioSettingsPayload) {
+  return {
+    legal_name: requiredText(payload.legal_name, 'la razón social', 160),
+    trade_name: requiredText(payload.trade_name, 'el nombre comercial', 160),
+    tax_id: requiredText(payload.tax_id, 'el CIF/NIF', 40),
+    address: requiredText(payload.address, 'el domicilio', 240),
+    city: requiredText(payload.city, 'la localidad', 120),
+    postal_code: requiredText(payload.postal_code, 'el código postal', 20),
+    phone: requiredText(payload.phone, 'el teléfono', 40),
+    health_registration_number: requiredText(
+      payload.health_registration_number,
+      'el número de registro sanitario',
+      120
+    ),
+    attest_health_data: payload.attest_health_data === true,
+  };
+}
+
+async function isRegistrationOnlyContractEnabled(serviceClient: SupabaseClient<Database>) {
+  const { data, error } = await (serviceClient as unknown as {
+    rpc: (name: typeof CONTRACT_STATE_RPC, args: Record<string, never>) => Promise<{
+      data: unknown;
+      error: unknown;
+    }>;
+  }).rpc(CONTRACT_STATE_RPC, {});
+
+  if (
+    error ||
+    !Array.isArray(data) ||
+    data.length !== 1 ||
+    !data[0] ||
+    data[0].contract_version !== CONTRACT_VERSION ||
+    typeof data[0].enabled !== 'boolean'
+  ) {
+    throw new Error('No se pudo actualizar el estudio');
+  }
+
+  return data[0].enabled;
+}
+
 export async function getStudioSettings(
   managerProfile: Profile,
   serviceClient: SupabaseClient<Database>
@@ -133,8 +181,31 @@ export async function updateStudioSettings(
   payload: StudioSettingsPayload,
   serviceClient: SupabaseClient<Database>
 ): Promise<StudioSettings> {
-  const input = parseStudioSettingsPayload(payload);
-  const { data, error } = await serviceClient.rpc('update_studio_settings_as_manager', {
+  if (!await isRegistrationOnlyContractEnabled(serviceClient)) {
+    const input = parseStudioSettingsPayload(payload);
+    const { data, error } = await serviceClient.rpc('update_studio_settings_as_manager', {
+      p_actor_profile_id: managerProfile.id,
+      p_studio_id: managerProfile.studio_id,
+      p_legal_name: input.legal_name,
+      p_trade_name: input.trade_name,
+      p_tax_id: input.tax_id,
+      p_address: input.address,
+      p_city: input.city,
+      p_postal_code: input.postal_code,
+      p_phone: input.phone,
+      p_health_registration_number: input.health_registration_number,
+      p_health_authorization_date: input.health_authorization_date,
+      p_attest_health_data: input.attest_health_data,
+    });
+
+    if (error || !data) {
+      throw new Error('No se pudo actualizar el estudio');
+    }
+    return data;
+  }
+
+  const input = parseRegistrationOnlyStudioSettingsPayload(payload);
+  const { data, error } = await serviceClient.rpc('update_studio_settings_as_manager_v2', {
     p_actor_profile_id: managerProfile.id,
     p_studio_id: managerProfile.studio_id,
     p_legal_name: input.legal_name,
@@ -145,12 +216,19 @@ export async function updateStudioSettings(
     p_postal_code: input.postal_code,
     p_phone: input.phone,
     p_health_registration_number: input.health_registration_number,
-    p_health_authorization_date: input.health_authorization_date,
     p_attest_health_data: input.attest_health_data,
+    p_contract_version: CONTRACT_VERSION,
   });
 
-  if (error || !data) {
-    throw new Error(error?.message || 'No se pudo actualizar el estudio');
+  if (
+    error ||
+    !Array.isArray(data) ||
+    data.length !== 1 ||
+    !data[0] ||
+    data[0].contract_version !== CONTRACT_VERSION ||
+    !ACCEPTED_V2_OUTCOMES.has(data[0].outcome_code)
+  ) {
+    throw new Error('No se pudo actualizar el estudio');
   }
-  return data;
+  return getStudioSettings(managerProfile, serviceClient);
 }
