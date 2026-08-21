@@ -27,8 +27,10 @@ const harness = vi.hoisted(() => {
   const fileQuery: any = {
     select: vi.fn(() => fileQuery),
     eq: vi.fn(() => fileQuery),
+    in: vi.fn(() => bulkQuery),
     single: vi.fn(),
   };
+  const bulkQuery: any = { eq: vi.fn() };
   const channel: any = {
     on: vi.fn(() => channel),
     subscribe: vi.fn(() => channel),
@@ -41,7 +43,7 @@ const harness = vi.hoisted(() => {
     storage: { from: vi.fn(() => storage) },
   };
 
-  return { channel, client, consent, fileQuery, listQuery, storage };
+  return { bulkQuery, channel, client, consent, fileQuery, listQuery, storage };
 });
 
 vi.mock('@/utils/supabase/client', () => ({ createClient: () => harness.client }));
@@ -58,6 +60,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   harness.listQuery.order.mockResolvedValue({ data: [harness.consent], error: null });
   harness.fileQuery.single.mockResolvedValue({ data: { storage_path: 'studio-a/final-file-a.pdf' }, error: null });
+  harness.bulkQuery.eq.mockResolvedValue({
+    data: [{ id: 'final-file-a', consent_id: 'consent-tenant-safe', storage_path: 'studio-a/final-file-a.pdf' }],
+    error: null,
+  });
   harness.storage.download.mockResolvedValue({ data: new Blob(['immutable-pdf']), error: null });
   harness.storage.createSignedUrl.mockResolvedValue({ data: { signedUrl: 'https://invalid.local/signed' }, error: null });
   vi.spyOn(window, 'open').mockImplementation(() => null);
@@ -145,5 +151,46 @@ describe('ConsentsManager immutable individual download', () => {
     expect(harness.storage.download).toHaveBeenCalledWith('studio-a/final-file-a.pdf');
     expect(window.URL.createObjectURL).not.toHaveBeenCalled();
     expect(click).not.toHaveBeenCalled();
+  });
+});
+
+describe('ConsentsManager truthful ZIP export', () => {
+  it('reports actual partial counts and queries only authenticated final metadata', async () => {
+    harness.listQuery.order.mockResolvedValue({
+      data: [harness.consent, { ...harness.consent, id: 'pending-b', status: 'pending_artist', final_file_id: null }],
+      error: null,
+    });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    render(<ConsentsManager studioId="studio-a" />);
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: /exportar todos/i }));
+
+    expect(await screen.findByText('Exportados: 1. Omitidos: 1. Fallidos: 0.')).toBeVisible();
+    expect(harness.fileQuery.in).toHaveBeenCalledWith('id', ['final-file-a']);
+    expect(harness.bulkQuery.eq).toHaveBeenCalledWith('document_kind', 'final');
+    expect(click).toHaveBeenCalledOnce();
+    expect(document.body.textContent).not.toContain('Cliente Sintetico.pdf');
+  });
+
+  it('refuses zero-success exports without false download and preserves a retryable selection', async () => {
+    harness.bulkQuery.eq.mockResolvedValue({ data: [], error: null });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    render(<ConsentsManager studioId="studio-a" />);
+    await userEvent.setup().click((await screen.findAllByRole('checkbox'))[1]);
+
+    await userEvent.setup().click(screen.getByRole('button', { name: /^exportar zip$/i }));
+
+    expect(await screen.findByText('No se pudo exportar ningún PDF. Omitidos: 0. Fallidos: 1.')).toBeVisible();
+    expect(click).not.toHaveBeenCalled();
+    expect(screen.getByText('1 consentimiento seleccionado')).toBeVisible();
+  });
+
+  it('disables ZIP actions when the current rows have no final PDF', async () => {
+    harness.listQuery.order.mockResolvedValue({ data: [{ ...harness.consent, status: 'pending_artist', final_file_id: null }], error: null });
+    render(<ConsentsManager studioId="studio-a" />);
+
+    expect(await screen.findByRole('button', { name: /exportar todos/i })).toBeDisabled();
+    await userEvent.setup().click(screen.getAllByRole('checkbox')[1]);
+    expect(screen.getByRole('button', { name: /^exportar zip$/i })).toBeDisabled();
   });
 });
