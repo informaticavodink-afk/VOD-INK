@@ -101,6 +101,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
   }, [loadConsents, studioId, supabase]);
 
   const downloadPdf = async (consent: ConsentWithArtist) => {
+    setError(null);
     if (!consent.final_file_id) {
       setError('Este consentimiento no tiene un PDF final disponible');
       return;
@@ -114,20 +115,32 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
       .single();
 
     if (error || !data) {
-      setError('No se encontró el archivo PDF');
+      setError('No fue posible acceder al PDF final');
       return;
     }
 
-    const { data: signedData, error: signedError } = await supabase.storage
+    const { data: pdf, error: downloadError } = await supabase.storage
       .from('consent-pdfs')
-      .createSignedUrl(data.storage_path, 60);
+      .download(data.storage_path);
 
-    if (signedError || !signedData) {
-      setError('Error al generar enlace de descarga');
+    if (downloadError || !pdf) {
+      setError('No fue posible acceder al PDF final');
       return;
     }
 
-    window.open(signedData.signedUrl, '_blank');
+    const safeId = consent.id.replace(/[^a-zA-Z0-9_-]/g, '_') || 'documento';
+    // react-doctor-disable-next-line no-create-object-url-without-revoke -- Revoked in the finally block below.
+    const url = window.URL.createObjectURL(pdf);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Consentimiento_${safeId}.pdf`;
+    document.body.appendChild(link);
+    try {
+      link.click();
+    } finally {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }
   };
 
   const zipAndDownloadConsents = async (consentsToZip: ConsentWithArtist[]) => {
