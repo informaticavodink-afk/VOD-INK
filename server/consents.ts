@@ -10,6 +10,7 @@ import { getArtistConsentForUser } from "./artistConsent.js";
 export { saveConsentTechnique } from "./artistConsent.js";
 import {
 	buildConsentPdfData,
+	buildRegistrationOnlyConsentPdfData,
 	createDocumentSnapshot,
 } from "./consentPdfData.js";
 import type { WizardState } from "../src/types.js";
@@ -770,13 +771,16 @@ export async function generateAndSubmitConsent(
       consent.finalization_started_at,
      );
      const finalizedAt = new Date(finalizationStartedAt);
-     const document = buildConsentPdfData({
+     const documentInput = {
       consent,
       artist,
       studio,
       artistSignature: effectiveArtistSignature,
       generatedAt: finalizedAt,
-     });
+     };
+     const document = contract.mode === "registration-only"
+      ? buildRegistrationOnlyConsentPdfData(documentInput)
+      : buildConsentPdfData(documentInput);
      const { base64, fileName } = await generateConsentPDF(document);
      const pdfBuffer = Buffer.from(base64, "base64");
      const pdfSha256 = sha256Hex(pdfBuffer);

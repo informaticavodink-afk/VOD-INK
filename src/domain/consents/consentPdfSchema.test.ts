@@ -31,7 +31,43 @@ function v3Document(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function v4Document() {
+  const historical = validDocument();
+  const { fechaAutorizacion: _date, ...establecimiento } = historical.establecimiento;
+  return {
+    ...historical,
+    templateVersion: 'consent-v4-registration-only',
+    establecimiento,
+    tieneRepresentanteLegal: false,
+  };
+}
+
 describe('ConsentPdfDataSchema', () => {
+  it('accepts strict registration-only v4 data and preserves exact v2/v3 parsing', () => {
+    const v2 = validDocument();
+    const v3 = v3Document();
+    const v4 = v4Document();
+    expect(parseConsentPdfData(v2)).toEqual(v2);
+    expect(parseConsentPdfData(v3)).toEqual(v3);
+    expect(parseConsentPdfData(v4)).toEqual(v4);
+  });
+
+  it.each(['fechaAutorizacion', 'health_data_verified_at', 'contract_version', 'outcome_code'])(
+    'forbids %s in v4 establishment data',
+    (key) => {
+      const document = v4Document() as Record<string, any>;
+      document.establecimiento[key] = 'forbidden';
+      expect(() => parseConsentPdfData(document)).toThrow();
+    },
+  );
+
+  it('requires v4 registration and rejects unsupported canonical versions', () => {
+    expect(() => parseConsentPdfData({
+      ...v4Document(), establecimiento: { ...v4Document().establecimiento, numRegistroSanidad: '' },
+    })).toThrow(/Registro sanitario/i);
+    expect(() => parseConsentPdfData({ ...v4Document(), templateVersion: 'consent-v5-unsupported' })).toThrow();
+  });
+
   it.each([
     ['minor represented', { esMenor: true, tieneRepresentanteLegal: true, representante: representative }],
     ['adult unrepresented', { esMenor: false, tieneRepresentanteLegal: false, representante: null }],

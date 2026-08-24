@@ -7,13 +7,15 @@ vi.mock('./drive.js', () => ({ uploadToDrive: vi.fn() }));
 vi.mock('./publicStudio.js', () => ({ resolvePublicStudio: vi.fn() }));
 vi.mock('./publicArtists.js', () => ({ resolveAvailablePublicArtist: vi.fn() }));
 vi.mock('../src/lib/pdf.js', () => ({ generateConsentPDF: vi.fn() }));
-vi.mock('./consentPdfData.js', () => ({ buildConsentPdfData: vi.fn(), createDocumentSnapshot: vi.fn() }));
+vi.mock('./consentPdfData.js', () => ({
+  buildConsentPdfData: vi.fn(), buildRegistrationOnlyConsentPdfData: vi.fn(), createDocumentSnapshot: vi.fn(),
+}));
 
 import { createServiceClient } from './supabase.js';
 import { resolveAvailablePublicArtist } from './publicArtists.js';
 import { resolvePublicStudio } from './publicStudio.js';
 import { uploadToDrive } from './drive.js';
-import { buildConsentPdfData, createDocumentSnapshot } from './consentPdfData.js';
+import { buildConsentPdfData, buildRegistrationOnlyConsentPdfData, createDocumentSnapshot } from './consentPdfData.js';
 import { generateConsentPDF } from '../src/lib/pdf.js';
 import {
   generateAndSubmitConsent,
@@ -36,6 +38,7 @@ const mockedResolveArtist = vi.mocked(resolveAvailablePublicArtist);
 const mockedGeneratePdf = vi.mocked(generateConsentPDF);
 const mockedUploadToDrive = vi.mocked(uploadToDrive);
 const mockedBuildPdfData = vi.mocked(buildConsentPdfData);
+const mockedBuildRegistrationOnlyPdfData = vi.mocked(buildRegistrationOnlyConsentPdfData);
 const mockedCreateSnapshot = vi.mocked(createDocumentSnapshot);
 
 function selectChain(data: unknown, error: unknown = null) {
@@ -631,6 +634,27 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
         mockedGeneratePdf.mockResolvedValue({ base64: 'c3ludGhldGlj', blob: new Blob(), fileName: 'synthetic.pdf' });
       });
 
+      it('routes enabled READY finalization through the v4 composer without a legacy studio read', async () => {
+        const harness = memoryFinalizationClient();
+        harness.client.rpc = vi.fn()
+          .mockResolvedValueOnce({ data: [{ contract_version: 'registration-only-v2', enabled: true }], error: null })
+          .mockResolvedValueOnce({ data: [{
+            outcome_code: 'READY', contract_version: 'registration-only-v2', legal_name: 'LEGAL',
+            trade_name: 'TRADE', tax_id: 'B12345678', address: 'ADDRESS', city: 'CITY',
+            postal_code: '39001', phone: '600000000', health_registration_number: 'HEALTH-1',
+          }], error: null });
+
+        mockedBuildRegistrationOnlyPdfData.mockReturnValue({ templateVersion: 'consent-v4-registration-only' } as never);
+        await expect(signConsentAsArtist('consent-memory', 'signature-memory', 'user-memory'))
+          .resolves.toMatchObject({ status: 'signed' });
+        expect(mockedBuildRegistrationOnlyPdfData).toHaveBeenCalledWith(expect.objectContaining({
+          consent: expect.objectContaining({ id: 'consent-memory' }),
+          studio: expect.objectContaining({ health_registration_number: 'HEALTH-1' }),
+        }));
+        expect(mockedBuildPdfData).not.toHaveBeenCalled();
+        expect(harness.calls.from).not.toContain('studios');
+      });
+
       it.each([
         ['incomplete', { health_registration_number: '', health_authorization_date: null, health_data_verified_at: null }],
         ['demo', { health_registration_number: 'SAN/07/2024-C', health_authorization_date: '2024-06-15', health_data_verified_at: '2026-07-28T10:00:00.000Z' }],
@@ -769,6 +793,8 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
             expect(harness.calls.storageOptions).toEqual([{ contentType: 'application/pdf', upsert: false }]);
             expect(harness.calls.fileInserts).toBe(1);
             expect(harness.calls.signedUpdates).toBe(1);
+            expect(mockedBuildPdfData).toHaveBeenCalledTimes(1);
+            expect(mockedBuildRegistrationOnlyPdfData).not.toHaveBeenCalled();
             expect(mockedGeneratePdf).toHaveBeenCalledTimes(1);
             expect(mockedUploadToDrive).toHaveBeenCalledTimes(1);
             expect(mockedUploadToDrive).toHaveBeenCalledWith(expect.objectContaining({
