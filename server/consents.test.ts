@@ -1,18 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 
 vi.mock('./supabase.js', () => ({ createServiceClient: vi.fn() }));
 vi.mock('./drive.js', () => ({ uploadToDrive: vi.fn() }));
 vi.mock('./publicStudio.js', () => ({ resolvePublicStudio: vi.fn() }));
 vi.mock('./publicArtists.js', () => ({ resolveAvailablePublicArtist: vi.fn() }));
 vi.mock('../src/lib/pdf.js', () => ({ generateConsentPDF: vi.fn() }));
-vi.mock('./consentPdfData.js', () => ({ buildConsentPdfData: vi.fn(), createDocumentSnapshot: vi.fn() }));
+vi.mock('./consentPdfData.js', () => ({
+  buildConsentPdfData: vi.fn(), buildRegistrationOnlyConsentPdfData: vi.fn(), createDocumentSnapshot: vi.fn(),
+}));
 
 import { createServiceClient } from './supabase.js';
 import { resolveAvailablePublicArtist } from './publicArtists.js';
 import { resolvePublicStudio } from './publicStudio.js';
 import { uploadToDrive } from './drive.js';
-import { buildConsentPdfData, createDocumentSnapshot } from './consentPdfData.js';
+import { buildConsentPdfData, buildRegistrationOnlyConsentPdfData, createDocumentSnapshot } from './consentPdfData.js';
 import { generateConsentPDF } from '../src/lib/pdf.js';
 import {
   generateAndSubmitConsent,
@@ -23,6 +26,7 @@ import {
   deriveConsentRepresentation,
   buildRepresentativePersistence,
   getPublicConsentSigner,
+  resolveFinalizationContract,
 } from './consents';
 import type { WizardState } from '../src/types';
 import { RepresentanteSchema } from '../src/lib/schema';
@@ -34,6 +38,7 @@ const mockedResolveArtist = vi.mocked(resolveAvailablePublicArtist);
 const mockedGeneratePdf = vi.mocked(generateConsentPDF);
 const mockedUploadToDrive = vi.mocked(uploadToDrive);
 const mockedBuildPdfData = vi.mocked(buildConsentPdfData);
+const mockedBuildRegistrationOnlyPdfData = vi.mocked(buildRegistrationOnlyConsentPdfData);
 const mockedCreateSnapshot = vi.mocked(createDocumentSnapshot);
 
 function selectChain(data: unknown, error: unknown = null) {
@@ -65,6 +70,28 @@ const validTechnique = {
   tintas: [{ nombre: 'Negro real', numRegistroAEMPS: 'AEMPS-1', lote: 'LOTE-1', caducidad: '2029-01-01' }],
   otrosMateriales: 'Material estéril', duracion: 'Dos horas', posibilidadesEliminacion: 'Láser', presupuesto: '200 EUR',
 };
+
+function syntheticMinorState(): WizardState {
+  return {
+    pasoActual: 4,
+    artistaSeleccionado: { id: 'artist-memory', nombreYApellidos: 'SYNTHETIC ARTIST', titulacion: 'SYNTHETIC TITLE' },
+    datosCliente: {
+      nombreYApellidos: 'SYNTHETIC MINOR', dni: '12345678Z', fechaNacimiento: '2010-04-05',
+      domicilio: 'SYNTHETIC STREET 1', cp: '39001', localidad: 'SYNTHETIC CITY', telefono: '600000000',
+    },
+    esMenor: true,
+    tieneRepresentanteLegal: true,
+    datosRepresentante: {
+      nombreYApellidos: 'SYNTHETIC REPRESENTATIVE', dni: '12345678Z', fechaNacimiento: '1980-02-03',
+      domicilio: 'SYNTHETIC STREET 2', cp: '39002', localidad: 'SYNTHETIC CITY', telefono: '611111111',
+      parentesco: 'SYNTHETIC RELATION', acreditaMediante: 'SYNTHETIC DOCUMENT',
+    },
+    datosTecnica: validTechnique,
+    declaracionLeido: true, declaracionContraindicaciones: true, declaracionSaludSeleccionadas: [],
+    confirmadoPrecio: true, firmaCliente: 'data:image/png;base64,iVBORw0KGgoSYNTHETIC', firmaAplicador: '',
+    lugar: 'SYNTHETIC CITY', fecha: '2026-08-21',
+  };
+}
 
 function invalidWizardState(): WizardState {
   return {
@@ -249,6 +276,67 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
           body: { error: { code: 'FINALIZATION_CONTENT_CONFLICT', retryable: false } },
         });
       });
+
+      it('keeps the exact legacy studio path when the public contract reader is disabled', async () => {
+        const rpc = vi.fn().mockResolvedValue({
+          data: [{ contract_version: 'registration-only-v2', enabled: false }], error: null,
+        });
+        const studio = {
+          id: 'studio-contract', health_registration_number: 'HEALTH-1',
+          health_authorization_date: '2026-07-28', health_data_verified_at: '2026-07-28T10:00:00Z',
+        };
+        const from = vi.fn(() => selectChain(studio));
+
+        await expect(resolveFinalizationContract({ rpc, from } as never, 'profile-contract', 'studio-contract'))
+          .resolves.toEqual({ mode: 'legacy', studio });
+        expect(rpc).toHaveBeenCalledWith('get_registration_attestation_contract_state', {});
+        expect(from).toHaveBeenCalledWith('studios');
+      });
+
+      it('selects registration-only readiness v2 without reading the legacy studio row', async () => {
+        const ready = {
+          outcome_code: 'READY', contract_version: 'registration-only-v2', legal_name: 'LEGAL',
+          trade_name: 'TRADE', tax_id: 'B12345678', address: 'ADDRESS', city: 'CITY',
+          postal_code: '39001', phone: '600000000', health_registration_number: 'HEALTH-1',
+        };
+        const rpc = vi.fn()
+          .mockResolvedValueOnce({ data: [{ contract_version: 'registration-only-v2', enabled: true }], error: null })
+          .mockResolvedValueOnce({ data: [ready], error: null });
+        const from = vi.fn();
+
+        await expect(resolveFinalizationContract({ rpc, from } as never, 'profile-contract', 'studio-contract'))
+          .resolves.toEqual({ mode: 'registration-only', version: 'registration-only-v2', studio: { id: 'studio-contract', ...ready } });
+        expect(rpc).toHaveBeenLastCalledWith('get_studio_finalization_context_v2', {
+          p_actor_profile_id: 'profile-contract', p_studio_id: 'studio-contract',
+          p_contract_version: 'registration-only-v2',
+        });
+        expect(from).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['missing', { data: [], error: null }],
+        ['malformed', { data: [{ contract_version: 'registration-only-v2', enabled: 'false' }], error: null }],
+        ['unsupported', { data: [{ contract_version: 'registration-only-v1', enabled: false }], error: null }],
+        ['errored', { data: null, error: { message: 'reader unavailable' } }],
+      ])('fails closed for a %s contract state', async (_label, readerResult) => {
+        const from = vi.fn();
+        await expect(resolveFinalizationContract({
+          rpc: vi.fn().mockResolvedValue(readerResult), from,
+        } as never, 'profile-contract', 'studio-contract')).rejects.toMatchObject({
+          code: 'FINALIZATION_CONTRACT_UNAVAILABLE', retryable: true,
+        });
+        expect(from).not.toHaveBeenCalled();
+      });
+
+      it('rejects non-ready registration-only context without falling back to legacy data', async () => {
+        const rpc = vi.fn()
+          .mockResolvedValueOnce({ data: [{ contract_version: 'registration-only-v2', enabled: true }], error: null })
+          .mockResolvedValueOnce({ data: [{ contract_version: 'registration-only-v2', outcome_code: 'REGISTRATION_UNATTESTED' }], error: null });
+        const from = vi.fn();
+        await expect(resolveFinalizationContract({ rpc, from } as never, 'profile-contract', 'studio-contract'))
+          .rejects.toMatchObject({ code: 'STUDIO_HEALTH_UNVERIFIED' });
+        expect(from).not.toHaveBeenCalled();
+      });
     });
 
     function finalizationChain(
@@ -340,7 +428,10 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
         if (table === 'consent_signatures') return { upsert: signatureUpsert };
         throw new Error(`Unexpected table: ${table}`);
       });
-      const client = { from, storage: { from: vi.fn(() => ({ upload })) } };
+      const rpc = vi.fn().mockResolvedValue({
+        data: [{ contract_version: 'registration-only-v2', enabled: false }], error: null,
+      });
+      const client = { from, rpc, storage: { from: vi.fn(() => ({ upload })) } };
       mockedCreateServiceClient.mockReturnValue(client as never);
       return { client, consent, events, studioReads, consentUpdates, upload, signatureUpsert };
     }
@@ -375,6 +466,7 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
         signedUpdates: 0,
         uploadErrorFilters: [],
         driveClaims: [],
+        signatureUpserts: [],
       };
       let failedFileBefore = false;
       let failedFileAfter = false;
@@ -489,6 +581,7 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
         }
         if (query.table === 'consent_signatures') {
           state.signatureRecord = { ...query.payload };
+          calls.signatureUpserts.push({ payload: state.signatureRecord, options: query.options });
           return result();
         }
         return result();
@@ -496,7 +589,7 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
       const from = vi.fn((table: string) => {
         calls.from.push(table);
         const query: any = {
-          table, operation: 'select', columns: '*', filters: [], payload: null,
+          table, operation: 'select', columns: '*', filters: [], payload: null, options: null,
           select: vi.fn((columns: string) => { query.columns = columns; return query; }),
           eq: vi.fn((key: string, value: unknown) => { query.filters.push({ kind: 'eq', key, value }); return query; }),
           is: vi.fn((key: string, value: unknown) => { query.filters.push({ kind: 'is', key, value }); return query; }),
@@ -504,7 +597,7 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
           lt: vi.fn((key: string, value: unknown) => { query.filters.push({ kind: 'lt', key, value }); return query; }),
           update: vi.fn((payload: unknown) => { query.operation = 'update'; query.payload = payload; return query; }),
           insert: vi.fn((payload: unknown) => { query.operation = 'insert'; query.payload = payload; return query; }),
-          upsert: vi.fn((payload: unknown) => { query.operation = 'upsert'; query.payload = payload; return query; }),
+          upsert: vi.fn((payload: unknown, options: unknown) => { query.operation = 'upsert'; query.payload = payload; query.options = options; return query; }),
           single: vi.fn(() => execute(query)),
           maybeSingle: vi.fn(() => execute(query)),
         };
@@ -527,7 +620,10 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
         data: new Blob([Buffer.from('c3ludGhldGlj', 'base64')]),
         error: null,
       }));
-      const client = { from, storage: { from: vi.fn(() => ({ upload, download })) } };
+      const rpc = vi.fn().mockResolvedValue({
+        data: [{ contract_version: 'registration-only-v2', enabled: false }], error: null,
+      });
+      const client = { from, rpc, storage: { from: vi.fn(() => ({ upload, download })) } };
       mockedCreateServiceClient.mockReturnValue(client as never);
       return { client, state, calls, upload, download };
     }
@@ -536,6 +632,27 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
       beforeEach(() => {
         vi.clearAllMocks();
         mockedGeneratePdf.mockResolvedValue({ base64: 'c3ludGhldGlj', blob: new Blob(), fileName: 'synthetic.pdf' });
+      });
+
+      it('routes enabled READY finalization through the v4 composer without a legacy studio read', async () => {
+        const harness = memoryFinalizationClient();
+        harness.client.rpc = vi.fn()
+          .mockResolvedValueOnce({ data: [{ contract_version: 'registration-only-v2', enabled: true }], error: null })
+          .mockResolvedValueOnce({ data: [{
+            outcome_code: 'READY', contract_version: 'registration-only-v2', legal_name: 'LEGAL',
+            trade_name: 'TRADE', tax_id: 'B12345678', address: 'ADDRESS', city: 'CITY',
+            postal_code: '39001', phone: '600000000', health_registration_number: 'HEALTH-1',
+          }], error: null });
+
+        mockedBuildRegistrationOnlyPdfData.mockReturnValue({ templateVersion: 'consent-v4-registration-only' } as never);
+        await expect(signConsentAsArtist('consent-memory', 'signature-memory', 'user-memory'))
+          .resolves.toMatchObject({ status: 'signed' });
+        expect(mockedBuildRegistrationOnlyPdfData).toHaveBeenCalledWith(expect.objectContaining({
+          consent: expect.objectContaining({ id: 'consent-memory' }),
+          studio: expect.objectContaining({ health_registration_number: 'HEALTH-1' }),
+        }));
+        expect(mockedBuildPdfData).not.toHaveBeenCalled();
+        expect(harness.calls.from).not.toContain('studios');
       });
 
       it.each([
@@ -585,6 +702,82 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
             mockedUploadToDrive.mockResolvedValue({ driveFileId: 'drive-memory', driveViewLink: 'https://drive.invalid/memory' });
           });
 
+          it('carries a complete synthetic minor and representative attribution through artist finalization', async () => {
+            const state = syntheticMinorState();
+            let insertedConsent: Record<string, unknown> | undefined;
+            const consentInsert = vi.fn((payload: Record<string, unknown>) => {
+              insertedConsent = payload;
+              const chain = { select: vi.fn(), single: vi.fn().mockResolvedValue({ data: { id: 'consent-memory' }, error: null }) };
+              chain.select.mockReturnValue(chain);
+              return chain;
+            });
+            const publicSignatureUpsert = vi.fn().mockResolvedValue({ error: null });
+            const consentTable = {
+              select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }), insert: consentInsert,
+            };
+            const submissionClient = { from: vi.fn((table: string) => table === 'consents' ? consentTable : { upsert: publicSignatureUpsert }) };
+            const finalization = memoryFinalizationClient();
+            mockedCreateServiceClient.mockReturnValueOnce(submissionClient as never);
+            mockedResolvePublicStudio.mockResolvedValue({ id: 'studio-memory' } as never);
+            mockedResolveArtist.mockResolvedValue({ id: 'artist-memory' } as never);
+            const writeFile = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
+
+            await expect(generateAndSubmitConsent(state, 'synthetic-minor-key')).resolves.toMatchObject({
+              consentId: 'consent-memory', status: 'pending_technique',
+            });
+            const representativePersistence = {
+              representative_full_name: 'SYNTHETIC REPRESENTATIVE', representative_dni: '12345678Z',
+              representative_birth_date: '1980-02-03', representative_phone: '611111111',
+              representative_address: 'SYNTHETIC STREET 2', representative_postal_code: '39002',
+              representative_city: 'SYNTHETIC CITY', representative_relationship: 'SYNTHETIC RELATION',
+              representative_accreditation: 'SYNTHETIC DOCUMENT',
+            };
+            expect(insertedConsent).toMatchObject({
+              is_minor: true, has_legal_representative: true,
+              client_birth_date: '2010-04-05', client_phone: '600000000',
+              ...representativePersistence,
+            });
+            expect(publicSignatureUpsert).toHaveBeenCalledWith(expect.objectContaining({
+              consent_id: 'consent-memory', studio_id: 'studio-memory', artist_id: 'artist-memory',
+              signer_type: 'representative', signer_name: 'SYNTHETIC REPRESENTATIVE',
+              signature_hash: createHash('sha256').update(state.firmaCliente).digest('hex'),
+              metadata: { source: 'public_wizard' },
+            }), { onConflict: 'consent_id,signer_type' });
+
+            Object.assign(finalization.state.consent, insertedConsent, { status: 'pending_artist' });
+            await expect(signConsentAsArtist('consent-memory', 'synthetic-artist-signature', 'user-memory'))
+              .resolves.toMatchObject({ consentId: 'consent-memory', status: 'signed' });
+            expect(mockedBuildPdfData).toHaveBeenCalledWith(expect.objectContaining({
+              consent: expect.objectContaining(representativePersistence),
+            }));
+            expect(finalization.state.signatureRecord).toEqual({
+              consent_id: 'consent-memory', studio_id: 'studio-memory', artist_id: 'artist-memory',
+              signer_type: 'artist', signer_name: 'Artista Sintética',
+              signature_hash: createHash('sha256').update('synthetic-artist-signature').digest('hex'),
+              metadata: { source: 'artist_panel', storage_path: finalization.state.finalFile.storage_path },
+            });
+            expect(finalization.calls.signatureUpserts).toEqual([{
+              payload: finalization.state.signatureRecord,
+              options: { onConflict: 'consent_id,signer_type' },
+            }]);
+            expect(finalization.state.consent).toMatchObject({ status: 'signed', final_file_id: 'file-memory' });
+            writeFile.mockRestore();
+          });
+
+          it.each(['fechaNacimiento', 'telefono'] as const)(
+            'rejects a synthetic minor missing representative %s before persistence',
+            async (field) => {
+              const state = syntheticMinorState();
+              state.datosRepresentante[field] = '';
+
+              await expect(generateAndSubmitConsent(state, 'synthetic-invalid-key')).rejects.toMatchObject({
+                code: 'REPRESENTATION_INVALID', stage: 'representation',
+              });
+              expect(mockedCreateServiceClient).not.toHaveBeenCalled();
+            },
+          );
+
           it('reuses one deterministic artifact across repeated calls and claims Drive once', async () => {
             const harness = memoryFinalizationClient();
             const writeFile = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
@@ -600,6 +793,8 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
             expect(harness.calls.storageOptions).toEqual([{ contentType: 'application/pdf', upsert: false }]);
             expect(harness.calls.fileInserts).toBe(1);
             expect(harness.calls.signedUpdates).toBe(1);
+            expect(mockedBuildPdfData).toHaveBeenCalledTimes(1);
+            expect(mockedBuildRegistrationOnlyPdfData).not.toHaveBeenCalled();
             expect(mockedGeneratePdf).toHaveBeenCalledTimes(1);
             expect(mockedUploadToDrive).toHaveBeenCalledTimes(1);
             expect(mockedUploadToDrive).toHaveBeenCalledWith(expect.objectContaining({

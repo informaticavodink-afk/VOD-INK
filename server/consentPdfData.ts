@@ -1,6 +1,7 @@
 import type { Database } from '../src/types/supabase.js';
 import {
   CONSENT_PDF_TEMPLATE_VERSION,
+  CONSENT_PDF_V3_TEMPLATE_VERSION,
   parseConsentPdfData,
   type ConsentPdfData,
 } from '../src/domain/consents/consentPdfSchema.js';
@@ -9,12 +10,20 @@ type ConsentRow = Database['public']['Tables']['consents']['Row'];
 type ArtistRow = Database['public']['Tables']['artists']['Row'];
 type StudioRow = Database['public']['Tables']['studios']['Row'];
 
+export type RegistrationOnlyStudioContext = Pick<StudioRow,
+  'legal_name' | 'trade_name' | 'tax_id' | 'address' | 'city' | 'postal_code' |
+  'phone' | 'health_registration_number'>;
+
 interface BuildConsentPdfDataInput {
   consent: ConsentRow;
   artist: ArtistRow;
   studio: StudioRow;
   artistSignature: string;
   generatedAt?: Date;
+}
+
+interface BuildRegistrationOnlyConsentPdfDataInput extends Omit<BuildConsentPdfDataInput, 'studio'> {
+  studio: RegistrationOnlyStudioContext;
 }
 
 function required(value: string | null | undefined) {
@@ -47,19 +56,19 @@ function buildRepresentative(consent: ConsentRow) {
   };
 }
 
-export function buildConsentPdfData({
+function composeConsentPdfData({
   consent,
   artist,
   studio,
   artistSignature,
   generatedAt = new Date(),
-}: BuildConsentPdfDataInput): ConsentPdfData {
+}: BuildConsentPdfDataInput | BuildRegistrationOnlyConsentPdfDataInput, registrationOnly: boolean): ConsentPdfData {
   const legalAcceptance = (consent.legal_acceptance ?? {}) as Record<string, unknown>;
   const represented = consent.has_legal_representative === true;
   const representative = buildRepresentative(consent);
 
   return parseConsentPdfData({
-    templateVersion: CONSENT_PDF_TEMPLATE_VERSION,
+    templateVersion: registrationOnly ? CONSENT_PDF_TEMPLATE_VERSION : CONSENT_PDF_V3_TEMPLATE_VERSION,
     generatedAt: generatedAt.toISOString(),
     establecimiento: {
       nombreRazonSocial: studio.legal_name,
@@ -70,7 +79,9 @@ export function buildConsentPdfData({
       cif: required(studio.tax_id),
       telefono: required(studio.phone),
       numRegistroSanidad: required(studio.health_registration_number),
-      fechaAutorizacion: required(studio.health_authorization_date),
+      ...(registrationOnly ? {} : {
+        fechaAutorizacion: required((studio as StudioRow).health_authorization_date),
+      }),
     },
     aplicador: {
       id: artist.id,
@@ -99,6 +110,16 @@ export function buildConsentPdfData({
     lugar: required(studio.city),
     fecha: generatedAt.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' }),
   });
+}
+
+export function buildConsentPdfData(input: BuildConsentPdfDataInput): ConsentPdfData {
+  return composeConsentPdfData(input, false);
+}
+
+export function buildRegistrationOnlyConsentPdfData(
+  input: BuildRegistrationOnlyConsentPdfDataInput,
+): ConsentPdfData {
+  return composeConsentPdfData(input, true);
 }
 
 export function createDocumentSnapshot(document: ConsentPdfData) {

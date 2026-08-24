@@ -10,6 +10,7 @@ import { Download, FileCheck2, Loader2, Search, X } from 'lucide-react';
 import SensitiveText from '@/src/components/SensitiveText';
 import DatePicker from '@/src/components/DatePicker';
 import JSZip from 'jszip';
+import { exportConsentZip } from '@/src/lib/consentOperations';
 
 type Consent = Database['public']['Tables']['consents']['Row'];
 
@@ -51,6 +52,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   const loadConsents = useCallback(async () => {
     setLoading(true);
@@ -101,6 +103,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
   }, [loadConsents, studioId, supabase]);
 
   const downloadPdf = async (consent: ConsentWithArtist) => {
+    setError(null);
     if (!consent.final_file_id) {
       setError('Este consentimiento no tiene un PDF final disponible');
       return;
@@ -110,112 +113,84 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
       .from('consent_files')
       .select('storage_path')
       .eq('id', consent.final_file_id)
+      .eq('consent_id', consent.id)
       .eq('document_kind', 'final')
       .single();
 
     if (error || !data) {
-      setError('No se encontró el archivo PDF');
+      setError('No fue posible acceder al PDF final');
       return;
     }
 
-    const { data: signedData, error: signedError } = await supabase.storage
+    const { data: pdf, error: downloadError } = await supabase.storage
       .from('consent-pdfs')
-      .createSignedUrl(data.storage_path, 60);
+      .download(data.storage_path);
 
-    if (signedError || !signedData) {
-      setError('Error al generar enlace de descarga');
+    if (downloadError || !pdf) {
+      setError('No fue posible acceder al PDF final');
       return;
     }
 
-    window.open(signedData.signedUrl, '_blank');
+    const safeId = consent.id.replace(/[^a-zA-Z0-9_-]/g, '_') || 'documento';
+    // react-doctor-disable-next-line no-create-object-url-without-revoke -- Revoked in the finally block below.
+    const url = window.URL.createObjectURL(pdf);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Consentimiento_${safeId}.pdf`;
+    document.body.appendChild(link);
+    try {
+      link.click();
+    } finally {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }
   };
 
   const zipAndDownloadConsents = async (consentsToZip: ConsentWithArtist[]) => {
-    const signedConsents = consentsToZip.filter((consent) => consent.status === 'signed' && consent.final_file_id);
-    const totalCount = consentsToZip.length;
-    const signedCount = signedConsents.length;
-
     setError(null);
     setSuccessMessage(null);
-
-    if (signedCount === 0) {
-      setError('No hay consentimientos con un PDF final disponible para exportar.');
-      return;
-    }
-
     setZipping(true);
-
     try {
-      // 1. Get storage paths for selected consents
-      const finalFileIds = signedConsents
-        .map((consent) => consent.final_file_id)
-        .filter((id): id is string => Boolean(id));
-
-      const { data: files, error: filesError } = await supabase
-        .from('consent_files')
-        .select('id, consent_id, storage_path')
-        .in('id', finalFileIds)
-        .eq('document_kind', 'final');
-
-      if (filesError || !files || files.length === 0) {
-        throw new Error(filesError?.message || 'No se encontraron archivos asociados a los consentimientos seleccionados.');
-      }
-
-      const zip = new JSZip();
-
-      // 2. Download files in parallel
-      const downloadPromises = files.map(async (file) => {
-        const consent = signedConsents.find((c) => c.id === file.consent_id);
-        if (!consent) return;
-
-        const dateStr = new Date(consent.created_at).toISOString().split('T')[0];
-        // Clean client name for safe filenames
-        const clientNameClean = consent.client_full_name
-          .trim()
-          .replace(/[\/\\?%*:|"<>]/g, '_'); // Replace invalid characters
-        const filename = `Consentimiento_${clientNameClean}_${dateStr}_${consent.id.slice(0, 8)}.pdf`;
-
-        const { data, error } = await supabase.storage
-          .from('consent-pdfs')
-          .download(file.storage_path);
-
-        if (error || !data) {
-          console.error(`Error descargando ${filename}:`, error);
-          return; // Skip if fails, continue with others
-        }
-
-        zip.file(filename, data);
+      const result = await exportConsentZip(consentsToZip.map((consent) => ({
+        id: consent.id,
+        status: consent.status,
+        finalFileId: consent.final_file_id,
+      })), {
+        loadFinalFiles: async (ids) => {
+          const result = await supabase.from('consent_files')
+            .select('id, consent_id, storage_path').in('id', ids).eq('document_kind', 'final');
+          return { data: result.data?.map((file) => ({ id: file.id, consentId: file.consent_id, storagePath: file.storage_path })) ?? null, error: result.error };
+        },
+        downloadFile: (path) => supabase.storage.from('consent-pdfs').download(path),
+        createArchive: () => new JSZip(),
+        // react-doctor-disable-next-line no-create-object-url-without-revoke -- Coordinator revokes in its finally block.
+        createObjectURL: (blob) => window.URL.createObjectURL(blob),
+        revokeObjectURL: (url) => window.URL.revokeObjectURL(url),
+        saveArchive: (url, name) => {
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = name;
+          document.body.appendChild(link);
+          try { link.click(); } finally { document.body.removeChild(link); }
+        },
+        archiveName: `Consentimientos_VOD_INK_${new Date().toISOString().split('T')[0]}.zip`,
       });
-
-      await Promise.all(downloadPromises);
-
-      // 3. Generate ZIP and download
-      const content = await zip.generateAsync({ type: 'blob' });
-      const url = window.URL.createObjectURL(content);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Consentimientos_VOD_INK_${new Date().toISOString().split('T')[0]}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      if (signedCount < totalCount) {
-        setSuccessMessage(`Se exportaron ${signedCount} de los ${totalCount} consentimientos. Los ${totalCount - signedCount} restantes se omitieron por estar incompletos (sin PDF).`);
+      const { downloaded, skipped, failed } = result.outcome;
+      if (result.status === 'downloaded') {
+        setSuccessMessage(`Exportados: ${downloaded}. Omitidos: ${skipped}. Fallidos: ${failed}.`);
+        setSelectedIds([]);
+      } else if (result.reason === 'NO_ELIGIBLE_FILES') {
+        setError('No hay consentimientos con un PDF final disponible para exportar.');
       } else {
-        setSuccessMessage(`Se exportaron los ${signedCount} consentimientos completados correctamente en un archivo ZIP.`);
+        setError(`${result.reason === 'ARCHIVE_FAILED' ? 'No se pudo crear el archivo ZIP.' : 'No se pudo exportar ningún PDF.'} Omitidos: ${skipped}. Fallidos: ${failed}.`);
       }
-
-      setSelectedIds([]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al generar el archivo ZIP');
     } finally {
       setZipping(false);
     }
   };
 
   const downloadBulkZip = () => {
-    const selectedConsents = consents.filter((c) => selectedIds.includes(c.id));
+    const selectedConsents = consents.filter((c) => selectedIdSet.has(c.id));
     zipAndDownloadConsents(selectedConsents);
   };
 
@@ -244,7 +219,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
         <button
           type="button"
           onClick={downloadAllZip}
-          disabled={zipping || filtered.filter((c) => c.status === 'signed').length === 0}
+          disabled={zipping || !filtered.some((c) => c.status === 'signed' && c.final_file_id)}
           className="flex items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition-all hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {zipping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
@@ -280,7 +255,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
             <button
               type="button"
               onClick={downloadBulkZip}
-              disabled={zipping}
+              disabled={zipping || !consents.some((c) => selectedIdSet.has(c.id) && c.status === 'signed' && c.final_file_id)}
               className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer disabled:opacity-60"
             >
               {zipping ? (
@@ -374,7 +349,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
                   <td className="w-10 px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={selectedIds.includes(consent.id)}
+                      checked={selectedIdSet.has(consent.id)}
                       onChange={(e) => {
                         if (e.target.checked) {
                           setSelectedIds([...selectedIds, consent.id]);

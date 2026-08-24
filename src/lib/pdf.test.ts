@@ -33,6 +33,17 @@ function createV3Document(overrides: Record<string, unknown> = {}): ConsentPdfDa
   });
 }
 
+function createV4Document(overrides: Record<string, unknown> = {}): ConsentPdfData {
+  const historical = createV3Document();
+  const { fechaAutorizacion: _date, ...establecimiento } = historical.establecimiento;
+  return parseConsentPdfData({
+    ...historical,
+    templateVersion: 'consent-v4-registration-only',
+    establecimiento: { ...establecimiento, numRegistroSanidad: 'REGISTRO-V4-UNICO-42' },
+    ...overrides,
+  });
+}
+
 async function extractText(base64: string) {
   const task = getDocument({ data: new Uint8Array(Buffer.from(base64, 'base64')), useSystemFonts: true });
   const pdf = await task.promise;
@@ -45,6 +56,43 @@ async function extractText(base64: string) {
 }
 
 describe('generateConsentPDF', () => {
+  it('renders deterministic multi-page v4 with registration only and no authorization leakage', async () => {
+    const document = createV4Document({
+      esMenor: true,
+      tieneRepresentanteLegal: true,
+      representante: representative,
+      tecnica: { ...createDocument().tecnica, otrosMateriales: `V4 LARGO ${'seguro '.repeat(180)}FIN V4 LARGO` },
+    });
+    const rendered = await generateConsentPDF(document);
+    const repeated = await generateConsentPDF(document);
+    const { text, pageCount } = await extractText(rendered.base64);
+
+    expect(repeated.base64).toBe(rendered.base64);
+    expect(text).toContain('REGISTRO-V4-UNICO-42');
+    expect(text).toContain('FIN V4 LARGO');
+    expect(text).toContain('EL REPRESENTANTE LEGAL:');
+    expect(text).not.toContain('2024-09-01');
+    expect(text).not.toMatch(/fecha de autorizaci[oó]n|undefined|health_data_verified_at/i);
+    expect(pageCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps represented adult signer layout in v4 while preserving v2/v3 date text', async () => {
+    const [v2, v3, v4] = await Promise.all([
+      createDocument(),
+      createV3Document(),
+      createV4Document({ esMenor: false, tieneRepresentanteLegal: true, representante: representative }),
+    ].map(async (document) => extractText((await generateConsentPDF(document)).base64)));
+
+    for (const historical of [v2, v3]) {
+      expect(historical.text).toContain('SAN-UNICO-91');
+      expect(historical.text).toContain('2024-09-01');
+    }
+    expect(v4.text).toContain('EL REPRESENTANTE LEGAL:');
+    expect(v4.text).toContain('REPRESENTANTE PARAMETRIZADA');
+    expect(v4.text).not.toContain('EL CLIENTE:');
+    expect(v4.text).not.toMatch(/2024-09-01|undefined/);
+  });
+
   it('renders all three v3 representation states and visible representative fields', async () => {
     const documents = [
       createV3Document({ esMenor: true, tieneRepresentanteLegal: true, representante: representative }),

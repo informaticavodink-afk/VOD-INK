@@ -5,7 +5,7 @@
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { LEGAL_SECTIONS } from './legalTexts.js';
-import { hasLegalRepresentation, type ConsentPdfData } from '../domain/consents/consentPdfSchema.js';
+import { CONSENT_PDF_TEMPLATE_VERSION, hasLegalRepresentation, type ConsentPdfData } from '../domain/consents/consentPdfSchema.js';
 
 function base64ToUint8Array(base64: string): Uint8Array {
   const rawBase64 = base64.startsWith('data:') ? base64.split(',')[1] : base64;
@@ -165,10 +165,13 @@ export async function generateConsentPDF(document: ConsentPdfData): Promise<{ ba
       });
       tempY -= 12.5;
 
+      const registration = document.templateVersion === CONSENT_PDF_TEMPLATE_VERSION
+        ? document.establecimiento.numRegistroSanidad
+        : `${document.establecimiento.numRegistroSanidad} (${document.establecimiento.fechaAutorizacion})`;
       const establishmentFields = [
         `Razón Social: ${document.establecimiento.nombreRazonSocial}  |  CIF: ${document.establecimiento.cif}`,
         `Domicilio: ${document.establecimiento.domicilio}, ${document.establecimiento.localidad} (${document.establecimiento.cp})`,
-        `Tlf: ${document.establecimiento.telefono}  |  Reg. Sanitario: ${document.establecimiento.numRegistroSanidad} (${document.establecimiento.fechaAutorizacion})`,
+        `Tlf: ${document.establecimiento.telefono}  |  Reg. Sanitario: ${registration}`,
       ];
 
       for (const line of establishmentFields) {

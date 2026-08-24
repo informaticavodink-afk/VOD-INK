@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Database } from '../src/types/supabase';
-import { buildConsentPdfData, createDocumentSnapshot } from './consentPdfData';
+import { buildConsentPdfData, buildRegistrationOnlyConsentPdfData, createDocumentSnapshot } from './consentPdfData';
 
 type Consent = Database['public']['Tables']['consents']['Row'];
 type Artist = Database['public']['Tables']['artists']['Row'];
@@ -19,6 +19,22 @@ const artist = { id: consent.artist_id, full_name: 'ARTISTA BD', qualification: 
 const studio = { id: consent.studio_id, legal_name: 'ESTUDIO BD SL', trade_name: 'MARCA BD', address: 'CALLE ESTUDIO BD', city: 'SANTANDER', postal_code: '39002', tax_id: 'B12345678', phone: '942000001', health_registration_number: 'SAN-BD', health_authorization_date: '2024-01-01' } as Studio;
 
 describe('buildConsentPdfData', () => {
+  it('composes strict v4 from the narrow READY registration context without leaking contract metadata', () => {
+    const context = {
+      legal_name: 'ESTUDIO BD SL', trade_name: 'MARCA BD', address: 'CALLE ESTUDIO BD', city: 'SANTANDER',
+      postal_code: '39002', tax_id: 'B12345678', phone: '942000001', health_registration_number: 'SAN-BD',
+      contract_version: 'registration-only-v2', outcome_code: 'READY', health_data_verified_at: 'forbidden',
+    };
+    const document = buildRegistrationOnlyConsentPdfData({
+      consent, artist, studio: context, artistSignature: signature, generatedAt: new Date('2026-07-24T12:00:00Z'),
+    });
+    expect(document.templateVersion).toBe('consent-v4-registration-only');
+    expect(document.establecimiento).toEqual({
+      nombreRazonSocial: 'ESTUDIO BD SL', nombreComercial: 'MARCA BD', domicilio: 'CALLE ESTUDIO BD',
+      localidad: 'SANTANDER', cp: '39002', cif: 'B12345678', telefono: '942000001', numRegistroSanidad: 'SAN-BD',
+    });
+  });
+
   it('compone cada sección desde las filas persistidas', () => {
     const document = buildConsentPdfData({ consent, artist, studio, artistSignature: signature, generatedAt: new Date('2026-07-24T12:00:00Z') });
     expect(document.establecimiento).toEqual({

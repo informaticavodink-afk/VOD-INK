@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-export const CONSENT_PDF_TEMPLATE_VERSION = 'consent-v3-representation';
+export const CONSENT_PDF_TEMPLATE_VERSION = 'consent-v4-registration-only';
+export const CONSENT_PDF_V2_TEMPLATE_VERSION = 'consent-v2';
+export const CONSENT_PDF_V3_TEMPLATE_VERSION = 'consent-v3-representation';
 
 const requiredText = (label: string) => z.string().trim().min(1, `${label} es obligatorio`);
 const forbiddenPlaceholder = /aquí iría|\[[^\]]+\]|no asignado|^n\/?a$|tatuador ejemplo|^0{8}[a-z]$/i;
@@ -47,20 +49,29 @@ const pngSignatureSchema = z.string().regex(
   'La firma debe ser una imagen PNG válida',
 );
 
-export const ConsentPdfDataSchema = z.object({
-  templateVersion: safeText('Versión de plantilla'),
+const establishmentShape = {
+  nombreRazonSocial: safeText('Razón social'),
+  nombreComercial: safeText('Nombre comercial'),
+  domicilio: safeText('Dirección del establecimiento'),
+  localidad: safeText('Localidad del establecimiento'),
+  cp: safeText('Código postal del establecimiento'),
+  cif: safeText('CIF del establecimiento'),
+  telefono: safeText('Teléfono del establecimiento'),
+  numRegistroSanidad: safeText('Registro sanitario'),
+};
+
+const historicalEstablishmentSchema = z.object({
+  ...establishmentShape,
+  fechaAutorizacion: safeText('Fecha de autorización sanitaria'),
+}).strict();
+
+const registrationOnlyEstablishmentSchema = z.object({
+  ...establishmentShape,
+  fechaAutorizacion: z.never().optional(),
+}).strict();
+
+const consentShape = {
   generatedAt: safeText('Fecha de generación'),
-  establecimiento: z.object({
-    nombreRazonSocial: safeText('Razón social'),
-    nombreComercial: safeText('Nombre comercial'),
-    domicilio: safeText('Dirección del establecimiento'),
-    localidad: safeText('Localidad del establecimiento'),
-    cp: safeText('Código postal del establecimiento'),
-    cif: safeText('CIF del establecimiento'),
-    telefono: safeText('Teléfono del establecimiento'),
-    numRegistroSanidad: safeText('Registro sanitario'),
-    fechaAutorizacion: safeText('Fecha de autorización sanitaria'),
-  }).strict(),
   aplicador: z.object({
     id: z.string().uuid(),
     nombreYApellidos: safeText('Nombre del tatuador'),
@@ -79,13 +90,17 @@ export const ConsentPdfDataSchema = z.object({
   firmaAplicador: pngSignatureSchema,
   lugar: safeText('Lugar de firma'),
   fecha: safeText('Fecha de firma'),
-}).strict().superRefine((data, context) => {
-  const isV3 = data.templateVersion === CONSENT_PDF_TEMPLATE_VERSION;
-  if (isV3 && typeof data.tieneRepresentanteLegal !== 'boolean') {
-    context.addIssue({ code: 'custom', path: ['tieneRepresentanteLegal'], message: 'La representación legal debe estar indicada' });
-  }
-  if (isV3) {
-    if (data.esMenor && data.tieneRepresentanteLegal !== true) {
+};
+
+function validateRepresentation(
+  data: { esMenor: boolean; tieneRepresentanteLegal?: boolean; representante?: unknown },
+  context: z.RefinementCtx,
+  explicit: boolean,
+) {
+  if (explicit) {
+    if (typeof data.tieneRepresentanteLegal !== 'boolean') {
+      context.addIssue({ code: 'custom', path: ['tieneRepresentanteLegal'], message: 'La representación legal debe estar indicada' });
+    } else if (data.esMenor && !data.tieneRepresentanteLegal) {
       context.addIssue({ code: 'custom', path: ['tieneRepresentanteLegal'], message: 'Los menores requieren representación legal' });
     }
     if (data.tieneRepresentanteLegal === true && !data.representante) {
@@ -102,15 +117,39 @@ export const ConsentPdfDataSchema = z.object({
   if (!data.esMenor && data.representante) {
     context.addIssue({ code: 'custom', path: ['representante'], message: 'No debe incluirse representante para un adulto' });
   }
-});
+}
+
+export const ConsentPdfV2DataSchema = z.object({
+  templateVersion: z.literal(CONSENT_PDF_V2_TEMPLATE_VERSION),
+  ...consentShape,
+  establecimiento: historicalEstablishmentSchema,
+}).strict().superRefine((data, context) => validateRepresentation(data, context, false));
+
+export const ConsentPdfV3DataSchema = z.object({
+  templateVersion: z.literal(CONSENT_PDF_V3_TEMPLATE_VERSION),
+  ...consentShape,
+  establecimiento: historicalEstablishmentSchema,
+}).strict().superRefine((data, context) => validateRepresentation(data, context, true));
+
+export const ConsentPdfV4DataSchema = z.object({
+  templateVersion: z.literal(CONSENT_PDF_TEMPLATE_VERSION),
+  ...consentShape,
+  establecimiento: registrationOnlyEstablishmentSchema,
+}).strict().superRefine((data, context) => validateRepresentation(data, context, true));
+
+export const ConsentPdfDataSchema = z.union([
+  ConsentPdfV2DataSchema,
+  ConsentPdfV3DataSchema,
+  ConsentPdfV4DataSchema,
+]);
 
 export type ConsentTechnique = z.infer<typeof ConsentTechniqueSchema>;
 export type ConsentPdfData = z.infer<typeof ConsentPdfDataSchema>;
 
 export function hasLegalRepresentation(document: Pick<ConsentPdfData, 'templateVersion' | 'tieneRepresentanteLegal' | 'representante'>) {
-  return document.templateVersion === CONSENT_PDF_TEMPLATE_VERSION
-    ? document.tieneRepresentanteLegal === true
-    : document.representante !== null;
+  return document.templateVersion === CONSENT_PDF_V2_TEMPLATE_VERSION
+    ? document.representante !== null
+    : document.tieneRepresentanteLegal === true;
 }
 
 export function parseConsentPdfData(input: unknown): ConsentPdfData {
