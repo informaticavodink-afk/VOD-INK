@@ -24,6 +24,7 @@ import {
   deriveConsentRepresentation,
   buildRepresentativePersistence,
   getPublicConsentSigner,
+  resolveFinalizationContract,
 } from './consents';
 import type { WizardState } from '../src/types';
 import { RepresentanteSchema } from '../src/lib/schema';
@@ -272,6 +273,67 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
           body: { error: { code: 'FINALIZATION_CONTENT_CONFLICT', retryable: false } },
         });
       });
+
+      it('keeps the exact legacy studio path when the public contract reader is disabled', async () => {
+        const rpc = vi.fn().mockResolvedValue({
+          data: [{ contract_version: 'registration-only-v2', enabled: false }], error: null,
+        });
+        const studio = {
+          id: 'studio-contract', health_registration_number: 'HEALTH-1',
+          health_authorization_date: '2026-07-28', health_data_verified_at: '2026-07-28T10:00:00Z',
+        };
+        const from = vi.fn(() => selectChain(studio));
+
+        await expect(resolveFinalizationContract({ rpc, from } as never, 'profile-contract', 'studio-contract'))
+          .resolves.toEqual({ mode: 'legacy', studio });
+        expect(rpc).toHaveBeenCalledWith('get_registration_attestation_contract_state', {});
+        expect(from).toHaveBeenCalledWith('studios');
+      });
+
+      it('selects registration-only readiness v2 without reading the legacy studio row', async () => {
+        const ready = {
+          outcome_code: 'READY', contract_version: 'registration-only-v2', legal_name: 'LEGAL',
+          trade_name: 'TRADE', tax_id: 'B12345678', address: 'ADDRESS', city: 'CITY',
+          postal_code: '39001', phone: '600000000', health_registration_number: 'HEALTH-1',
+        };
+        const rpc = vi.fn()
+          .mockResolvedValueOnce({ data: [{ contract_version: 'registration-only-v2', enabled: true }], error: null })
+          .mockResolvedValueOnce({ data: [ready], error: null });
+        const from = vi.fn();
+
+        await expect(resolveFinalizationContract({ rpc, from } as never, 'profile-contract', 'studio-contract'))
+          .resolves.toEqual({ mode: 'registration-only', version: 'registration-only-v2', studio: { id: 'studio-contract', ...ready } });
+        expect(rpc).toHaveBeenLastCalledWith('get_studio_finalization_context_v2', {
+          p_actor_profile_id: 'profile-contract', p_studio_id: 'studio-contract',
+          p_contract_version: 'registration-only-v2',
+        });
+        expect(from).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['missing', { data: [], error: null }],
+        ['malformed', { data: [{ contract_version: 'registration-only-v2', enabled: 'false' }], error: null }],
+        ['unsupported', { data: [{ contract_version: 'registration-only-v1', enabled: false }], error: null }],
+        ['errored', { data: null, error: { message: 'reader unavailable' } }],
+      ])('fails closed for a %s contract state', async (_label, readerResult) => {
+        const from = vi.fn();
+        await expect(resolveFinalizationContract({
+          rpc: vi.fn().mockResolvedValue(readerResult), from,
+        } as never, 'profile-contract', 'studio-contract')).rejects.toMatchObject({
+          code: 'FINALIZATION_CONTRACT_UNAVAILABLE', retryable: true,
+        });
+        expect(from).not.toHaveBeenCalled();
+      });
+
+      it('rejects non-ready registration-only context without falling back to legacy data', async () => {
+        const rpc = vi.fn()
+          .mockResolvedValueOnce({ data: [{ contract_version: 'registration-only-v2', enabled: true }], error: null })
+          .mockResolvedValueOnce({ data: [{ contract_version: 'registration-only-v2', outcome_code: 'REGISTRATION_UNATTESTED' }], error: null });
+        const from = vi.fn();
+        await expect(resolveFinalizationContract({ rpc, from } as never, 'profile-contract', 'studio-contract'))
+          .rejects.toMatchObject({ code: 'STUDIO_HEALTH_UNVERIFIED' });
+        expect(from).not.toHaveBeenCalled();
+      });
     });
 
     function finalizationChain(
@@ -363,7 +425,10 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
         if (table === 'consent_signatures') return { upsert: signatureUpsert };
         throw new Error(`Unexpected table: ${table}`);
       });
-      const client = { from, storage: { from: vi.fn(() => ({ upload })) } };
+      const rpc = vi.fn().mockResolvedValue({
+        data: [{ contract_version: 'registration-only-v2', enabled: false }], error: null,
+      });
+      const client = { from, rpc, storage: { from: vi.fn(() => ({ upload })) } };
       mockedCreateServiceClient.mockReturnValue(client as never);
       return { client, consent, events, studioReads, consentUpdates, upload, signatureUpsert };
     }
@@ -552,7 +617,10 @@ expect(buildRepresentativePersistence(false, representative)).toEqual({
         data: new Blob([Buffer.from('c3ludGhldGlj', 'base64')]),
         error: null,
       }));
-      const client = { from, storage: { from: vi.fn(() => ({ upload, download })) } };
+      const rpc = vi.fn().mockResolvedValue({
+        data: [{ contract_version: 'registration-only-v2', enabled: false }], error: null,
+      });
+      const client = { from, rpc, storage: { from: vi.fn(() => ({ upload, download })) } };
       mockedCreateServiceClient.mockReturnValue(client as never);
       return { client, state, calls, upload, download };
     }

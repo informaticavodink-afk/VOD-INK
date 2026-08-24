@@ -51,6 +51,11 @@ export interface SubmitConsentResult {
       message: "No se pudo completar la finalización del consentimiento. Vuelve a intentarlo.",
       retryable: true,
      },
+     FINALIZATION_CONTRACT_UNAVAILABLE: {
+      status: 503,
+      message: "No se pudo verificar el contrato de finalización. Vuelve a intentarlo.",
+      retryable: true,
+     },
     } as const;
 
     export type FinalizationErrorCode = keyof typeof FINALIZATION_ERROR_DEFINITIONS;
@@ -99,6 +104,63 @@ export interface SubmitConsentResult {
      ) {
       throw new FinalizationError("STUDIO_HEALTH_UNVERIFIED");
      }
+    }
+
+    const REGISTRATION_CONTRACT_VERSION = "registration-only-v2" as const;
+    const REGISTRATION_CONTRACT_READER = "get_registration_attestation_contract_state";
+    const REGISTRATION_READINESS_RPC = "get_studio_finalization_context_v2";
+
+    type FinalizationRpcClient = {
+     rpc(name: string, args: Record<string, unknown>): Promise<{ data: unknown; error: unknown }>;
+     from(table: "studios"): {
+      select(columns: "*"): { eq(column: "id", id: string): { single(): Promise<{ data: any; error: any }> } };
+     };
+    };
+
+    export type FinalizationContract =
+     | { mode: "legacy"; studio: any }
+     | { mode: "registration-only"; version: typeof REGISTRATION_CONTRACT_VERSION; studio: any };
+
+    function singletonRecord(data: unknown) {
+     return Array.isArray(data) && data.length === 1 && data[0] && typeof data[0] === "object"
+      ? data[0] as Record<string, unknown>
+      : null;
+    }
+
+    export async function resolveFinalizationContract(
+     client: FinalizationRpcClient,
+     actorProfileId: string,
+     studioId: string,
+    ): Promise<FinalizationContract> {
+     const stateResult = await client.rpc(REGISTRATION_CONTRACT_READER, {});
+     const state = singletonRecord(stateResult.data);
+     if (stateResult.error || state?.contract_version !== REGISTRATION_CONTRACT_VERSION ||
+      typeof state.enabled !== "boolean") {
+      throw new FinalizationError("FINALIZATION_CONTRACT_UNAVAILABLE");
+     }
+
+     if (!state.enabled) {
+      const { data: studio, error } = await client.from("studios").select("*").eq("id", studioId).single();
+      if (error || !studio) throw retryableFinalization("No se encontraron los datos del establecimiento");
+      assertStudioHealthVerified(studio);
+      return { mode: "legacy", studio };
+     }
+
+     const readinessResult = await client.rpc(REGISTRATION_READINESS_RPC, {
+      p_actor_profile_id: actorProfileId,
+      p_studio_id: studioId,
+      p_contract_version: REGISTRATION_CONTRACT_VERSION,
+     });
+     const readiness = singletonRecord(readinessResult.data);
+     if (readinessResult.error || readiness?.contract_version !== REGISTRATION_CONTRACT_VERSION) {
+      throw new FinalizationError("FINALIZATION_CONTRACT_UNAVAILABLE");
+     }
+     if (readiness.outcome_code !== "READY") throw new FinalizationError("STUDIO_HEALTH_UNVERIFIED");
+     return {
+      mode: "registration-only",
+      version: REGISTRATION_CONTRACT_VERSION,
+      studio: { id: studioId, ...readiness },
+     };
     }
 
     export function deriveConsentRepresentation(
@@ -690,15 +752,12 @@ export async function generateAndSubmitConsent(
 		);
 	}
 
-     const { data: studio, error: studioError } = await supabase
-      .from("studios")
-      .select("*")
-      .eq("id", consent.studio_id)
-      .single();
-     if (studioError || !studio) {
-     throw retryableFinalization("No se encontraron los datos del establecimiento");
-     }
-     assertStudioHealthVerified(studio);
+     const contract = await resolveFinalizationContract(
+      supabase as unknown as FinalizationRpcClient,
+      artist.profile_id,
+      consent.studio_id,
+     );
+     const studio = contract.studio;
      const effectiveArtistSignature = await claimFinalizationArtistSignature(
       supabase,
       consentId,
