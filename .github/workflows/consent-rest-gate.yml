@@ -25,11 +25,14 @@ jobs:
         shell: bash
         run: |
           npx supabase status --output env | while IFS= read -r line; do
+            value=${line#*=}
+            value=${value#"}
+            value=${value%"}
             case "$line" in
-              API_URL=*) echo "SUPABASE_URL=${line#API_URL=}" ;;
-              DB_URL=*) echo "SUPABASE_DB_URL=${line#DB_URL=}" ;;
-              ANON_KEY=*) echo "SUPABASE_ANON_KEY=${line#ANON_KEY=}" ;;
-              SERVICE_ROLE_KEY=*) echo "SUPABASE_SERVICE_ROLE_KEY=${line#SERVICE_ROLE_KEY=}" ;;
+              API_URL=*) echo "SUPABASE_URL=$value" ;;
+              DB_URL=*) echo "SUPABASE_DB_URL=$value" ;;
+              ANON_KEY=*) echo "SUPABASE_ANON_KEY=$value" ;;
+              SERVICE_ROLE_KEY=*) echo "SUPABASE_SERVICE_ROLE_KEY=$value" ;;
             esac
           done >> "$GITHUB_ENV"
       - name: Run mandatory release tests
