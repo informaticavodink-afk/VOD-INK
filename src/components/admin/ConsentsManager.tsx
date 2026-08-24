@@ -59,7 +59,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
     setSelectedIds([]); // Clear selection when loading
     const { data, error } = await supabase
       .from('consents')
-      .select('*, artists(full_name)')
+      .select('*, artists:artists!consents_artist_studio_fkey(full_name)')
       .eq('studio_id', studioId)
       .order('created_at', { ascending: false });
 
