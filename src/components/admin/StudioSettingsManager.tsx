@@ -5,7 +5,6 @@ import {
   fetchStudioSettings,
   saveStudioSettings,
   studioToForm,
-  todayInMadrid,
   type Studio,
   type StudioForm,
 } from '@/src/lib/studioSettingsClient';
@@ -49,20 +48,15 @@ export default function StudioSettingsManager() {
 
   const healthChanged = useMemo(() => {
     if (!studio) return false;
-    return (
-      form.health_registration_number.trim() !== (studio.health_registration_number ?? '').trim()
-      || form.health_authorization_date !== (studio.health_authorization_date ?? '')
-    );
-  }, [form.health_authorization_date, form.health_registration_number, studio]);
+    return form.health_registration_number.trim() !== (studio.health_registration_number ?? '').trim();
+  }, [form.health_registration_number, studio]);
 
-  const canAttest = Boolean(
-    form.health_registration_number.trim() && form.health_authorization_date
-  );
+  const canAttest = Boolean(form.health_registration_number.trim());
 
   const setField = (field: keyof StudioForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
     setSuccess(null);
-    if (field === 'health_registration_number' || field === 'health_authorization_date') {
+    if (field === 'health_registration_number') {
       setConfirmHealth(false);
     }
   };
@@ -224,7 +218,7 @@ export default function StudioSettingsManager() {
             )}
           </div>
 
-          <div className="mt-5 grid gap-5 md:grid-cols-2">
+          <div className="mt-5">
             <label className={labelClass}>
               Número de registro sanitario
               <input
@@ -232,16 +226,6 @@ export default function StudioSettingsManager() {
                 className={fieldClass}
                 value={form.health_registration_number}
                 onChange={(event) => setField('health_registration_number', event.target.value)}
-              />
-            </label>
-            <label className={labelClass}>
-              Fecha de autorización
-              <input
-                type="date"
-                max={todayInMadrid()}
-                className={fieldClass}
-                value={form.health_authorization_date}
-                onChange={(event) => setField('health_authorization_date', event.target.value)}
               />
             </label>
           </div>
@@ -257,7 +241,7 @@ export default function StudioSettingsManager() {
               onChange={(event) => setConfirmHealth(event.target.checked)}
             />
             <span className="text-sm leading-relaxed">
-              Confirmo que el número y la fecha coinciden con la autorización sanitaria oficial
+              Confirmo que el número de registro coincide con la autorización sanitaria oficial
               vigente del estudio.
             </span>
           </label>
