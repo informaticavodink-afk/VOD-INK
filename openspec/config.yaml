@@ -30,10 +30,10 @@ technology:
   testing:
     runner: Vitest 3.2
     environment: node
-    unit: npm test
-    coverage: npm run test:coverage
-    typecheck: npm run lint
-    build: npm run build
+    unit: bun run test
+    coverage: bun run test:coverage
+    typecheck: bun run lint
+    build: bun run build
 
 architecture:
   tenancy: single-studio
@@ -49,7 +49,7 @@ architecture:
 
 strict_tdd:
   enabled: true
-  test_runner: npm test
+  test_runner: bun run test
   evidence_required:
     RED: >-
       Capture a focused failing Vitest test before implementation.
@@ -60,9 +60,9 @@ strict_tdd:
     REFACTOR: >-
       Re-run the focused suite after cleanup without changing behavior.
   verification_commands:
-    - npm test
-    - npm run lint
-    - npm run build
+    - bun run test
+    - bun run lint
+    - bun run build
 
 phases:
   default_mode: auto
