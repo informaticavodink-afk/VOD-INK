@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 describe('StudioSettingsManager', () => {
-  it('loads studio data and requires an explicit declaration before attesting it', async () => {
+  it('loads studio data without exposing an authorization date and attests the registration number', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify({ studio }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -41,9 +41,10 @@ describe('StudioSettingsManager', () => {
 
     expect(await screen.findByDisplayValue('Estudio Legal')).toBeVisible();
     expect(screen.getByText('Pendiente')).toBeVisible();
+    expect(screen.queryByLabelText(/fecha de autorización/i)).not.toBeInTheDocument();
 
     const confirmation = screen.getByRole('checkbox', {
-      name: /coinciden con la autorización sanitaria oficial/i,
+      name: /número de registro coincide con la autorización sanitaria oficial/i,
     });
     expect(confirmation).not.toBeChecked();
     await user.click(confirmation);
@@ -52,16 +53,17 @@ describe('StudioSettingsManager', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     const request = fetchMock.mock.calls[1][1] as RequestInit;
     expect(request.method).toBe('PATCH');
-    expect(JSON.parse(String(request.body))).toMatchObject({
+    const body = JSON.parse(String(request.body));
+    expect(body).toMatchObject({
       legal_name: 'Estudio Legal',
       health_registration_number: 'REG-REAL-001',
-      health_authorization_date: '2025-01-10',
       attest_health_data: true,
     });
+    expect(body).not.toHaveProperty('health_authorization_date');
     expect(await screen.findByText(/estado sanitario confirmado/i)).toBeVisible();
   });
 
-  it('allows saving legal data without falsely attesting missing sanitary data', async () => {
+  it('keeps attestation unavailable when the registration number is missing', async () => {
     const withoutHealth = {
       ...studio,
       health_registration_number: null,
@@ -79,11 +81,12 @@ describe('StudioSettingsManager', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     const request = fetchMock.mock.calls[1][1] as RequestInit;
-    expect(JSON.parse(String(request.body))).toMatchObject({
+    const body = JSON.parse(String(request.body));
+    expect(body).toMatchObject({
       attest_health_data: false,
       health_registration_number: '',
-      health_authorization_date: '',
     });
+    expect(body).not.toHaveProperty('health_authorization_date');
     expect(await screen.findByText(/confirmación sanitaria sigue pendiente/i)).toBeVisible();
   });
 });

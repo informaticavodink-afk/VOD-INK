@@ -170,7 +170,7 @@ describe('studio settings persistence boundary', () => {
     expect(from).not.toHaveBeenCalled();
   });
 
-  it('uses v2 without forwarding the legacy date while the contract is enabled', async () => {
+  it('accepts a registration-only payload without forwarding the legacy date while the contract is enabled', async () => {
     const rpc = vi.fn()
       .mockResolvedValueOnce({
         data: [{ contract_version: 'registration-only-v2', enabled: true }],
@@ -185,7 +185,8 @@ describe('studio settings persistence boundary', () => {
     const select = vi.fn(() => ({ eq }));
     const client = { rpc, from: vi.fn(() => ({ select })) };
 
-    await expect(updateStudioSettings(profile as never, validPayload, client as never)).resolves.toEqual(studio);
+    const { health_authorization_date: _legacyDate, ...registrationOnlyPayload } = validPayload;
+    await expect(updateStudioSettings(profile as never, registrationOnlyPayload, client as never)).resolves.toEqual(studio);
 
     expect(rpc).toHaveBeenNthCalledWith(
       2,
