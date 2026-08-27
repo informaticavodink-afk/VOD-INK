@@ -17,14 +17,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun ci
       - name: Start owned local Supabase stack
-        run: npx supabase start --exclude realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor,mailpit
+        run: bunx --no-install supabase start --exclude realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor,mailpit
       - name: Export local-only credentials
         shell: bash
         run: |
-          npx supabase status --output env | while IFS= read -r line; do
+          bunx --no-install supabase status --output env | while IFS= read -r line; do
             value=${line#*=}
             value="${value#\"}"
             value="${value%\"}"
@@ -36,7 +38,7 @@ jobs:
             esac
           done >> "$GITHUB_ENV"
       - name: Run mandatory release tests
-        run: npm test
+        run: bun run test
       - name: Stop only this workflow's stack
         if: always()
-        run: npx supabase stop --project-id Vod-INK --no-backup
+        run: bunx --no-install supabase stop --project-id Vod-INK --no-backup
