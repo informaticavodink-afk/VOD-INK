@@ -11,6 +11,7 @@ import SensitiveText from '@/src/components/SensitiveText';
 import DatePicker from '@/src/components/DatePicker';
 import JSZip from 'jszip';
 import { exportConsentZip } from '@/src/lib/consentOperations';
+import { saveBlobAsFile, startStorageDownload } from '@/src/lib/fileDownload';
 
 type Consent = Database['public']['Tables']['consents']['Row'];
 
@@ -122,28 +123,18 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
       return;
     }
 
-    const { data: pdf, error: downloadError } = await supabase.storage
+    const safeId = consent.id.replace(/[^a-zA-Z0-9_-]/g, '_') || 'documento';
+    const filename = `Consentimiento_${safeId}.pdf`;
+    const { data: signed, error: signedError } = await supabase.storage
       .from('consent-pdfs')
-      .download(data.storage_path);
+      .createSignedUrl(data.storage_path, 60, { download: filename });
 
-    if (downloadError || !pdf) {
+    if (signedError || !signed) {
       setError('No fue posible acceder al PDF final');
       return;
     }
 
-    const safeId = consent.id.replace(/[^a-zA-Z0-9_-]/g, '_') || 'documento';
-    // react-doctor-disable-next-line no-create-object-url-without-revoke -- Revoked in the finally block below.
-    const url = window.URL.createObjectURL(pdf);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Consentimiento_${safeId}.pdf`;
-    document.body.appendChild(link);
-    try {
-      link.click();
-    } finally {
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    }
+    startStorageDownload(signed.signedUrl, filename);
   };
 
   const zipAndDownloadConsents = async (consentsToZip: ConsentWithArtist[]) => {
@@ -163,16 +154,7 @@ export default function ConsentsManager({ studioId }: ConsentsManagerProps) {
         },
         downloadFile: (path) => supabase.storage.from('consent-pdfs').download(path),
         createArchive: () => new JSZip(),
-        // react-doctor-disable-next-line no-create-object-url-without-revoke -- Coordinator revokes in its finally block.
-        createObjectURL: (blob) => window.URL.createObjectURL(blob),
-        revokeObjectURL: (url) => window.URL.revokeObjectURL(url),
-        saveArchive: (url, name) => {
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = name;
-          document.body.appendChild(link);
-          try { link.click(); } finally { document.body.removeChild(link); }
-        },
+        deliverArchive: (blob, name) => saveBlobAsFile(blob, name),
         archiveName: `Consentimientos_VOD_INK_${new Date().toISOString().split('T')[0]}.zip`,
       });
       const { downloaded, skipped, failed } = result.outcome;

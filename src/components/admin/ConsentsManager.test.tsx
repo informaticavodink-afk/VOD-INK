@@ -100,7 +100,7 @@ describe('ConsentsManager tenant-safe artist listing', () => {
 });
 
 describe('ConsentsManager immutable individual download', () => {
-  it('downloads only the referenced final file with an opaque safe filename', async () => {
+  it('downloads only the referenced final file through a signed URL with an opaque safe filename', async () => {
     let clickedAnchor: HTMLAnchorElement | undefined;
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function captureAnchor() {
       clickedAnchor = this;
@@ -113,9 +113,15 @@ describe('ConsentsManager immutable individual download', () => {
     expect(harness.fileQuery.eq).toHaveBeenNthCalledWith(1, 'id', 'final-file-a');
     expect(harness.fileQuery.eq).toHaveBeenNthCalledWith(2, 'consent_id', 'consent-tenant-safe');
     expect(harness.fileQuery.eq).toHaveBeenNthCalledWith(3, 'document_kind', 'final');
-    expect(harness.storage.download).toHaveBeenCalledWith('studio-a/final-file-a.pdf');
+    expect(harness.storage.download).not.toHaveBeenCalled();
+    expect(harness.storage.createSignedUrl).toHaveBeenCalledWith(
+      'studio-a/final-file-a.pdf',
+      60,
+      { download: 'Consentimiento_consent-tenant-safe.pdf' },
+    );
     expect(clickedAnchor?.download).toBe('Consentimiento_consent-tenant-safe.pdf');
-    expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:final-file-a');
+    expect(clickedAnchor?.getAttribute('href')).toBe('https://invalid.local/signed');
+    expect(window.URL.createObjectURL).not.toHaveBeenCalled();
     expect(window.open).not.toHaveBeenCalled();
   });
 
@@ -136,20 +142,24 @@ describe('ConsentsManager immutable individual download', () => {
     await userEvent.setup().click(await screen.findByRole('button', { name: /ver \/ descargar/i }));
 
     expect(await screen.findByText('No fue posible acceder al PDF final')).toBeVisible();
-    expect(harness.storage.download).not.toHaveBeenCalled();
+    expect(harness.storage.createSignedUrl).not.toHaveBeenCalled();
     expect(window.URL.createObjectURL).not.toHaveBeenCalled();
     expect(click).not.toHaveBeenCalled();
   });
 
   it('reports a missing immutable storage object without creating a download', async () => {
-    harness.storage.download.mockResolvedValue({ data: null, error: { message: 'Object not found' } });
+    harness.storage.createSignedUrl.mockResolvedValue({ data: null, error: { message: 'Object not found' } });
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     render(<ConsentsManager studioId="studio-a" />);
 
     await userEvent.setup().click(await screen.findByRole('button', { name: /ver \/ descargar/i }));
 
     expect(await screen.findByText('No fue posible acceder al PDF final')).toBeVisible();
-    expect(harness.storage.download).toHaveBeenCalledWith('studio-a/final-file-a.pdf');
+    expect(harness.storage.createSignedUrl).toHaveBeenCalledWith(
+      'studio-a/final-file-a.pdf',
+      60,
+      { download: 'Consentimiento_consent-tenant-safe.pdf' },
+    );
     expect(window.URL.createObjectURL).not.toHaveBeenCalled();
     expect(click).not.toHaveBeenCalled();
   });
@@ -163,15 +173,20 @@ describe('ConsentsManager truthful ZIP export', () => {
 
     expect(await screen.findByText('Cliente Sintetico')).toBeVisible();
     await userEvent.setup().click(screen.getByRole('button', { name: /ver \/ descargar/i }));
-    await waitFor(() => expect(harness.storage.download).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(harness.storage.createSignedUrl).toHaveBeenCalledTimes(1));
     await userEvent.setup().click(screen.getByRole('button', { name: /exportar todos/i }));
 
     expect(await screen.findByText('Exportados: 1. Omitidos: 0. Fallidos: 0.')).toBeVisible();
     expect(harness.fileQuery.eq).toHaveBeenCalledWith('id', 'final-file-a');
     expect(harness.fileQuery.eq).toHaveBeenCalledWith('consent_id', 'consent-tenant-safe');
     expect(harness.fileQuery.in).toHaveBeenCalledWith('id', ['final-file-a']);
-    expect(harness.storage.download).toHaveBeenNthCalledWith(1, 'studio-a/final-file-a.pdf');
-    expect(harness.storage.download).toHaveBeenNthCalledWith(2, 'studio-a/final-file-a.pdf');
+    expect(harness.storage.createSignedUrl).toHaveBeenCalledWith(
+      'studio-a/final-file-a.pdf',
+      60,
+      { download: 'Consentimiento_consent-tenant-safe.pdf' },
+    );
+    expect(harness.storage.download).toHaveBeenCalledOnce();
+    expect(harness.storage.download).toHaveBeenCalledWith('studio-a/final-file-a.pdf');
     expect(click).toHaveBeenCalledTimes(2);
   });
 
