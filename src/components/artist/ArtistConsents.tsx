@@ -9,6 +9,7 @@ import type { Database } from '@/src/types/supabase';
 import { AlertCircle, Download, Eye, FileSignature, FileText, Loader2, Search } from 'lucide-react';
 import SensitiveText from '@/src/components/SensitiveText';
 import DatePicker from '@/src/components/DatePicker';
+import { openStorageDocument, startStorageDownload } from '@/src/lib/fileDownload';
 
 type Consent = Database['public']['Tables']['consents']['Row'];
 type Artist = Database['public']['Tables']['artists']['Row'];
@@ -51,7 +52,7 @@ function getConsentStatusLabel(status: Consent['status']) {
 
 const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
   function ArtistConsents(
-    { artistId, artist, statusFilter, onStatusFilterChange, onPreviewConsent, onInterveneConsent },
+    { artistId, statusFilter, onStatusFilterChange, onPreviewConsent, onInterveneConsent },
     ref
   ) {
     const [consents, setConsents] = useState<ConsentWithStudio[]>([]);
@@ -120,10 +121,10 @@ const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
       };
     }, [artistId, loadConsents, supabase]);
 
-    const downloadPdf = async (consent: ConsentWithStudio) => {
+    const resolveFinalStoragePath = async (consent: ConsentWithStudio): Promise<string | null> => {
       if (!consent.final_file_id) {
         setError('Este consentimiento no tiene un PDF final disponible');
-        return;
+        return null;
       }
 
       const { data, error } = await supabase
@@ -135,19 +136,44 @@ const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
 
       if (error || !data) {
         setError('No se encontró el archivo PDF');
-        return;
+        return null;
       }
 
+      return data.storage_path;
+    };
+
+    const downloadPdf = async (consent: ConsentWithStudio) => {
+      const storagePath = await resolveFinalStoragePath(consent);
+      if (!storagePath) return;
+
+      const safeId = consent.id.replace(/[^a-zA-Z0-9_-]/g, '_') || 'documento';
+      const filename = `Consentimiento_${safeId}.pdf`;
       const { data: signedData, error: signedError } = await supabase.storage
         .from('consent-pdfs')
-        .createSignedUrl(data.storage_path, 60);
+        .createSignedUrl(storagePath, 60, { download: filename });
 
       if (signedError || !signedData) {
         setError('Error al generar enlace de descarga');
         return;
       }
 
-      window.open(signedData.signedUrl, '_blank');
+      startStorageDownload(signedData.signedUrl, filename);
+    };
+
+    const openPdf = async (consent: ConsentWithStudio) => {
+      const storagePath = await resolveFinalStoragePath(consent);
+      if (!storagePath) return;
+
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('consent-pdfs')
+        .createSignedUrl(storagePath, 60);
+
+      if (signedError || !signedData) {
+        setError('Error al abrir el PDF');
+        return;
+      }
+
+      openStorageDocument(signedData.signedUrl);
     };
 
     const pending = consents.filter((c) => isPendingSignatureStatus(c.status)).length;
@@ -299,15 +325,28 @@ const ArtistConsents = forwardRef<ArtistConsentsHandle, ArtistConsentsProps>(
                               </button>
                             </div>
                           ) : consent.status === 'signed' && consent.final_file_id ? (
-                            <button
-                              type="button"
-                              onClick={() => downloadPdf(consent)}
-                              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-700 transition-all hover:bg-zinc-100 cursor-pointer"
-                              title="Descargar PDF"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              Descargar
-                            </button>
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openPdf(consent)}
+                                className="inline-flex items-center gap-2 rounded-xl border border-purple-100 bg-purple-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-purple-600 transition-colors hover:bg-purple-100 cursor-pointer"
+                                title="Abrir PDF firmado"
+                                aria-label="Abrir PDF firmado"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                Ver
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => downloadPdf(consent)}
+                                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-700 transition-all hover:bg-zinc-100 cursor-pointer"
+                                title="Descargar PDF"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                Descargar
+                              </button>
+                            </div>
                           ) : (
                             <span className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-500">
                               Sin fichero
