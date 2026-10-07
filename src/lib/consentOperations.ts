@@ -18,7 +18,7 @@ export type ExportOutcome = {
 };
 
 type ArchiveWriter = {
-  file(name: string, data: Blob): unknown;
+  file(name: string, data: Blob): void;
   generateAsync(options: { type: 'blob' }): Promise<Blob>;
 };
 
@@ -26,9 +26,7 @@ export type ConsentZipDependencies = {
   loadFinalFiles(ids: string[]): Promise<{ data: FinalConsentFile[] | null; error: unknown }>;
   downloadFile(path: string): Promise<{ data: Blob | null; error: unknown }>;
   createArchive(): ArchiveWriter;
-  createObjectURL(blob: Blob): string;
-  revokeObjectURL(url: string): void;
-  saveArchive(url: string, name: string): void | Promise<void>;
+  deliverArchive(blob: Blob, name: string): void | Promise<void>;
   archiveName: string;
 };
 
@@ -91,35 +89,31 @@ export async function exportConsentZip(
     );
     if (!finalFile) {
       outcome.failed += 1;
-      return;
+      return false;
     }
 
     try {
       const downloaded = await dependencies.downloadFile(finalFile.storagePath);
       if (downloaded.error || !downloaded.data) {
         outcome.failed += 1;
-        return;
+        return false;
       }
       archive.file(filenames[index], downloaded.data);
       outcome.downloaded += 1;
+      return true;
     } catch {
       outcome.failed += 1;
+      return false;
     }
   }));
 
   if (outcome.downloaded === 0) return { status: 'refused', reason: 'NO_FILES_DOWNLOADED', outcome };
 
-  let url: string | undefined;
   try {
     const blob = await archive.generateAsync({ type: 'blob' });
-    url = dependencies.createObjectURL(blob);
-    await dependencies.saveArchive(url, dependencies.archiveName);
+    await dependencies.deliverArchive(blob, dependencies.archiveName);
     return { status: 'downloaded', outcome };
   } catch {
     return { status: 'refused', reason: 'ARCHIVE_FAILED', outcome };
-  } finally {
-    if (url) {
-      try { dependencies.revokeObjectURL(url); } catch { /* preserve opaque result */ }
-    }
   }
 }

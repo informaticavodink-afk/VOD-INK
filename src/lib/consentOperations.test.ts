@@ -6,9 +6,10 @@ const second = { id: 'consent-b', status: 'signed', finalFileId: 'file-b' };
 const pending = { id: 'consent-pending', status: 'pending_artist', finalFileId: null };
 
 function harness() {
+  const zipBlob = new Blob(['zip']);
   const archive = {
     file: vi.fn(),
-    generateAsync: vi.fn().mockResolvedValue(new Blob(['zip'])),
+    generateAsync: vi.fn().mockResolvedValue(zipBlob),
   };
   const deps: ConsentZipDependencies = {
     loadFinalFiles: vi.fn().mockResolvedValue({
@@ -20,12 +21,10 @@ function harness() {
     }),
     downloadFile: vi.fn().mockResolvedValue({ data: new Blob(['pdf']), error: null }),
     createArchive: vi.fn(() => archive),
-    createObjectURL: vi.fn(() => 'blob:zip'),
-    revokeObjectURL: vi.fn(),
-    saveArchive: vi.fn(),
+    deliverArchive: vi.fn(),
     archiveName: 'Consentimientos_2026-08-21.zip',
   };
-  return { archive, deps };
+  return { archive, deps, zipBlob };
 }
 
 let current: ReturnType<typeof harness>;
@@ -35,7 +34,7 @@ beforeEach(() => {
 });
 
 describe('exportConsentZip', () => {
-  it('archives actual downloads and reports partial success without diagnostics containing PII', async () => {
+  it('delivers the generated ZIP blob with its archive name and reports partial success without diagnostics containing PII', async () => {
     vi.mocked(current.deps.downloadFile)
       .mockResolvedValueOnce({ data: new Blob(['pdf-a']), error: null })
       .mockResolvedValueOnce({ data: null, error: new Error('private path and client name') });
@@ -48,12 +47,15 @@ describe('exportConsentZip', () => {
     });
     expect(current.archive.file).toHaveBeenCalledOnce();
     expect(current.archive.file).toHaveBeenCalledWith('Consentimiento_consent-a.pdf', expect.any(Blob));
-    expect(current.deps.saveArchive).toHaveBeenCalledWith('blob:zip', 'Consentimientos_2026-08-21.zip');
-    expect(current.deps.revokeObjectURL).toHaveBeenCalledWith('blob:zip');
+    expect(current.deps.deliverArchive).toHaveBeenCalledOnce();
+    expect(current.deps.deliverArchive).toHaveBeenCalledWith(
+      current.zipBlob,
+      'Consentimientos_2026-08-21.zip',
+    );
     expect(JSON.stringify(result)).not.toContain('private path');
   });
 
-  it('refuses zero-success exports and never creates an empty archive', async () => {
+  it('refuses zero-success exports and never creates or delivers an empty archive', async () => {
     vi.mocked(current.deps.loadFinalFiles).mockResolvedValue({ data: [], error: null });
 
     const result = await exportConsentZip([good], current.deps);
@@ -64,8 +66,7 @@ describe('exportConsentZip', () => {
       outcome: { eligible: 1, downloaded: 0, skipped: 0, failed: 1 },
     });
     expect(current.archive.generateAsync).not.toHaveBeenCalled();
-    expect(current.deps.createObjectURL).not.toHaveBeenCalled();
-    expect(current.deps.saveArchive).not.toHaveBeenCalled();
+    expect(current.deps.deliverArchive).not.toHaveBeenCalled();
   });
 
   it('counts ineligible consents as skipped without loading final metadata', async () => {
@@ -134,9 +135,8 @@ describe('exportConsentZip', () => {
     expect(JSON.stringify(result)).not.toContain('private archive detail');
   });
 
-  it('revokes the archive URL and reports an opaque refusal when saving fails', async () => {
-    vi.mocked(current.deps.saveArchive).mockRejectedValue(new Error('private browser detail'));
-    vi.mocked(current.deps.revokeObjectURL).mockImplementation(() => { throw new Error('private cleanup detail'); });
+  it('reports an opaque refusal when asynchronous archive delivery fails', async () => {
+    vi.mocked(current.deps.deliverArchive).mockRejectedValue(new Error('private browser detail'));
 
     const result = await exportConsentZip([good], current.deps);
 
@@ -145,7 +145,19 @@ describe('exportConsentZip', () => {
       reason: 'ARCHIVE_FAILED',
       outcome: { eligible: 1, downloaded: 1, skipped: 0, failed: 0 },
     });
-    expect(current.deps.revokeObjectURL).toHaveBeenCalledWith('blob:zip');
     expect(JSON.stringify(result)).not.toContain('private browser detail');
+  });
+
+  it('reports an opaque refusal when synchronous archive delivery throws', async () => {
+    vi.mocked(current.deps.deliverArchive).mockImplementation(() => { throw new Error('private sync detail'); });
+
+    const result = await exportConsentZip([good], current.deps);
+
+    expect(result).toEqual({
+      status: 'refused',
+      reason: 'ARCHIVE_FAILED',
+      outcome: { eligible: 1, downloaded: 1, skipped: 0, failed: 0 },
+    });
+    expect(JSON.stringify(result)).not.toContain('private sync detail');
   });
 });
